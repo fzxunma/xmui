@@ -11,7 +11,7 @@ export class XmApp {
     await XmDb.init();
     console.log("XmApp initialized.");
   }
-  static run() {
+  static async run() {
     // 创建 Bun 服务器
     XmApp.server = Bun.serve({
       port: 3000,
