@@ -1,0 +1,21 @@
+{
+  "name": "@fzxunma@xmui", // 或 "@your-org/xmui" 如果使用组织
+  "version": "1.0.0",
+  "description": "A lightweight Web Component UI library",
+  "main": "dist/xmui.min.js",
+  "module": "dist/xmui.min.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "vite build", // 或你的打包命令
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": ["web-components", "ui-library", "javascript"],
+  "author": "Your Name <your.email@example.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/xmui.git"
+  }
+}
