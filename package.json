@@ -12,10 +12,10 @@
     "prepublishOnly": "npm run build"
   },
   "keywords": ["web-components", "ui-library", "javascript"],
-  "author": "Your Name <your.email@example.com>",
+  "author": "xunma <fzxunma@hotmail.com>",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/xmui.git"
+    "url": "https://github.com/fzxunma/xmui.git"
   }
 }
