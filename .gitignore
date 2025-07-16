@@ -70,3 +70,5 @@ obj/
 
 # Test results
 test-results/
+
+package-lock.json
