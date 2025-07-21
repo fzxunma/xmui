@@ -1,4 +1,4 @@
-import { join, resolve, normalize } from "path";
+import { join, resolve, normalize, extname, basename, dirname } from "path";
 import { stat } from "fs/promises";
 import { XmProject } from "./XmProject.js";
 
@@ -25,7 +25,16 @@ export class XmStaticFs {
       XmProject.appPath,
       normalize(pathname === "/" ? "index.html" : pathname)
     );
-    const absoluteFilePath = resolve(filePath);
+    let finalFilePath = filePath;
+    if (extname(filePath) === "") {
+      const name = basename(filePath);
+      const capitalizedName = name.charAt(0).toUpperCase() + name.slice(1);
+      const newFileName = `Xm${capitalizedName}Page.js`;
+      finalFilePath = join(dirname(filePath), newFileName);
+    }
+
+    console.log(`Requested file path: ${filePath}`);
+    const absoluteFilePath = resolve(finalFilePath);
 
     // 确保路径在 public 目录内，防止路径遍历
     if (!absoluteFilePath.startsWith(resolve(XmProject.appPath))) {
@@ -40,7 +49,7 @@ export class XmStaticFs {
       if (stats.isFile()) {
         // 是文件，直接提供
         const file = Bun.file(absoluteFilePath);
-        const ext = filePath.slice(filePath.lastIndexOf(".")).toLowerCase();
+        const ext = absoluteFilePath.slice(absoluteFilePath.lastIndexOf(".")).toLowerCase();
         const contentType =
           XmStaticFs.mimeTypes[ext] || "application/octet-stream";
 
