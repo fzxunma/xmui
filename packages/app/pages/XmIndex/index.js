@@ -1,6 +1,6 @@
 import { ref } from "vue";
-import XmCount from "../components/XmCount.vue";
-import XmHtml from "../components/XmHtml.js";
+import XmCount from "../../components/XmCount.vue";
+import XmHtml from "../../components/XmHtml.js";
 export default {
   name: "XmIndexPage",
   components: { XmCount, XmHtml },
@@ -41,25 +41,5 @@ export default {
       notes2: "# 会议议程2\n- 产品演示",
     });
     return { message, b2Data, users, meeting };
-  },
-  template: `
-      <div class="p-4">
-      <RouterLink to="/pages/hello">Go to Hello</RouterLink>
-        <h1>{{ message }}</h1>
-               <XmCount  />
-        <p v-if="b2Data">B2 Message: {{ b2Data.message }}</p>
-        <p v-else>Loading B2...</p>
-        <div v-if="users">
-          <h2>User List</h2>
-          <ul>
-            <li v-for="user in users" :key="user.id">
-              {{ user.data.username }} ({{ user.data.email }})
-            </li>
-          </ul>
-        </div>
-        <p v-else>Loading users...</p>
-              </div>
-              <XmHtml id="1" v-model:content="meeting.notes1"/>
-      <XmHtml id="2" v-model:content="meeting.notes2"/>
-    `,
+  }
 };

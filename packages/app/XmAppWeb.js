@@ -8,7 +8,6 @@ import {
   NDatePicker,
   NConfigProvider,
 } from "naive-ui";
-console.log("Loading Naive UI components...",NButton);
 const naive = create({
   components: [NButton, NInput, NDatePicker, NConfigProvider],
 });

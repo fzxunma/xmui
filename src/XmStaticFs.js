@@ -22,6 +22,7 @@ export class XmStaticFs {
       console.log(`Invalid path attempt: ${absoluteFilePath}`);
       return new Response("Forbidden", { status: 403 });
     }
+
     const stats = await stat(absoluteFilePath);
 
     if (stats.isFile()) {
@@ -33,6 +34,30 @@ export class XmStaticFs {
       const contentType =
         XmStaticFs.mimeTypes[ext] || "application/octet-stream";
 
+      if (ext === ".js" && absoluteFilePath.endsWith("index.js")) {
+        const dir = absoluteFilePath.slice(
+          0,
+          absoluteFilePath.lastIndexOf("/")
+        );
+        const dirName = dir.slice(dir.lastIndexOf("/") + 1);
+        const specialDirs = ["pages", "components", "views", "layouts"];
+        if (specialDirs.includes(dirName)) {
+          const htmlPath = `${dir}/index.html`;
+          const htmlFile = Bun.file(htmlPath);
+          if (await htmlFile.exists()) {
+            const htmlContent = await htmlFile.text();
+            let jsContent = await file.text();
+            // Replace the last } with }, template: html
+            jsContent = jsContent.replace(
+              /}$/,
+              `, template: \`${htmlContent.replace(/`/g, "\\`")}\`}`
+            );
+            return new Response(jsContent, {
+              headers: { "Content-Type": contentType },
+            });
+          }
+        }
+      }
       console.log(`Serving file: ${absoluteFilePath}`);
       return new Response(file, {
         headers: { "Content-Type": contentType },
