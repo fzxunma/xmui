@@ -14,11 +14,9 @@
     "prepublishOnly": "npm run build"
   },
   "keywords": [
-    "web-components",
+    "vue-components",
     "ui-library",
     "javascript",
-    "custom-elements",
-    "shadow-dom",
     "frontend"
   ],
   "author": "xunma <fzxunma@hotmail.com>",
@@ -31,17 +29,16 @@
     "packages/*"
   ],
   "devDependencies": {
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.11",
     "vite": "^7.0.4",
     "vitest": "^3.2.4"
   },
-  "exports": {
-    ".": {
-      "import": "./dist/xmui.min.js"
-    },
-    "./styles": "./dist/xmui.css"
-  },
   "dependencies": {
-    "@kangc/v-md-editor": "^1.7.12",
+    "esbuild": "^0.25.8",
+    "naive-ui": "^2.42.0",
+    "vant": "^4.9.21",
     "vue": "^3.5.17"
   }
 }

@@ -1,22 +1,13 @@
 import { createApp } from "vue";
 import XmRounterPage from "./pages/rounter";
 import router from "./router/index.js";
-import {
-  create,
-  NButton,
-  NInput,
-  NDatePicker,
-  NConfigProvider,
-} from "naive-ui";
-console.log("Loading Naive UI components...",NButton);
-const naive = create({
-  components: [NButton, NInput, NDatePicker, NConfigProvider],
-});
-
+import { Button, Cell, Toast } from "vant";
 class XmAppWeb {
   static async loadApp() {
     const App = createApp(XmRounterPage);
-    App.use(naive);
+    App.use(Button);
+    App.use(Cell);
+    App.use(Toast);
     App.use(router);
     App.mount("#app");
   }
