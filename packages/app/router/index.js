@@ -9,13 +9,13 @@ const routes = [
     component: {
       setup() {
         const route = useRoute();
-        const currentId = ref(route.params.id || 'index'); // 使用 ref 存储当前 id
+        const currentId = ref(route.params.id || "index"); // 使用 ref 存储当前 id
         console.log("Initial loading page:", currentId.value);
 
         // 定义异步组件加载函数
         const loadPage = (id) => {
           console.log("Loading page:", id);
-          return defineAsyncComponent(() => 
+          return defineAsyncComponent(() =>
             import(`../pages/${id}`).catch((error) => {
               console.error(`Failed to load component for ${id}:`, error);
               return import("../pages/index"); // 回退组件
@@ -26,12 +26,53 @@ const routes = [
         const Page = ref(loadPage(currentId.value)); // 初始加载
 
         // 监听路由参数变化
-        watch(() => route.params.id, (newId) => {
-          if (newId) {
-            currentId.value = newId;
-            Page.value = loadPage(newId); // 更新组件
-          }
-        }, { immediate: true }); // immediate 确保首次也触发
+        watch(
+          () => route.params.id,
+          (newId) => {
+            if (newId) {
+              currentId.value = newId;
+              Page.value = loadPage(newId); // 更新组件
+            }
+          },
+          { immediate: true }
+        ); // immediate 确保首次也触发
+
+        return () => h(Page.value);
+      },
+    },
+  },
+  {
+    path: "/pagesv3/:id",
+    component: {
+      setup() {
+        const route = useRoute();
+        const currentId = ref(route.params.id || "index"); // 使用 ref 存储当前 id
+        console.log("Initial loading page:", currentId.value);
+
+        // 定义异步组件加载函数
+        const loadPage = (id) => {
+          console.log("Loading page:", id,`../pages/Xm${id}Page.vue`);
+          return defineAsyncComponent(() =>
+            import(`../pages/Xm${id}Page.vue`).catch((error) => {
+              console.error(`Failed to load component for ${id}:`, error);
+              return import("../pages/index"); // 回退组件
+            })
+          );
+        };
+
+        const Page = ref(loadPage(currentId.value)); // 初始加载
+
+        // 监听路由参数变化
+        watch(
+          () => route.params.id,
+          (newId) => {
+            if (newId) {
+              currentId.value = newId;
+              Page.value = loadPage(newId); // 更新组件
+            }
+          },
+          { immediate: true }
+        ); // immediate 确保首次也触发
 
         return () => h(Page.value);
       },

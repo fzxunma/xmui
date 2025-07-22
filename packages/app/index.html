@@ -7,23 +7,17 @@
     <script type="importmap">
       {
         "imports": {
-          "vue": "/vendor/Vue-3.5.17.js",
-          "vue-router": "/vendor/VueRouter-4.5.1.js"
+          "vue": "/vendor/vue/Vue-3.5.17.js",
+          "vue-router": "/vendor/vue/VueRouter-4.5.1.js"
         }
       }
     </script>
     <!-- Quill CSS -->
-    <link
-      rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css"
-    />
-    <!-- Quill JS (UMD, global) -->
-    <script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
-    <link
-      rel="stylesheet"
-      href="https://unpkg.com/vditor/dist/index.css"
-    />
-    <script src="https://unpkg.com/vditor/dist/index.min.js"></script>
+    <link rel="stylesheet" href="vendor/quill/index.css"/>
+    <script src="/vendor/quill/index.js"></script>
+    <link rel="stylesheet" href="/vendor/vditor/index.css" />
+    <script src="/vendor/vditor/index.js"></script>
+    <script src="/vendor/windicss/index.js"></script>
   </head>
   <body>
     <div id="app"></div>

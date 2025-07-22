@@ -36,8 +36,8 @@ export default {
     return { message, b2Data, users };
   },
   template: `
-      <div class="p-4">heelo11111
-       <RouterLink to="/pagesv3/hello">Go to Hello</RouterLink>
+      <div class="p-4">heelo
+       <RouterLink to="/pages/hello1">Go to Hello</RouterLink>
       </div>
     `,
 };

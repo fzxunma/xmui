@@ -1,5 +1,5 @@
 import { ref } from "vue";
-import XmCount from "../components/XmCount.js";
+import XmCount from "../components/XmCount.vue";
 import XmMd from "../components/XmMd.js";
 import XmHtml from "../components/XmHtml.js";
 export default {
