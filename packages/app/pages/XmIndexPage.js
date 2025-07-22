@@ -1,8 +1,10 @@
 import { ref } from "vue";
-import { XmCount } from "../components/XmCount2.js";
+import XmCount from "../components/XmCount.js";
+import XmMd from "../components/XmMd.js";
+import XmHtml from "../components/XmHtml.js";
 export default {
   name: "XmIndexPage",
-  components: { XmCount },
+  components: { XmCount, XmMd,XmHtml },
   setup() {
     const message = ref("Hello vue!");
     const b2Data = ref(null);
@@ -52,5 +54,7 @@ export default {
         </div>
         <p v-else>Loading users...</p>
               </div>
+              <XmMd/>
+              <XmHtml/>
     `,
 };

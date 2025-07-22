@@ -39,5 +39,9 @@
       "import": "./dist/xmui.min.js"
     },
     "./styles": "./dist/xmui.css"
+  },
+  "dependencies": {
+    "@kangc/v-md-editor": "^1.7.12",
+    "vue": "^3.5.17"
   }
 }

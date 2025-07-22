@@ -1,11 +1,11 @@
-import { createApp } from 'vue';
+import { createApp } from "vue";
 import XmRounterPage from "./pages/rounter";
 import router from "./router/index.js";
 
 class XmAppWeb {
   static async loadApp() {
     const App = createApp(XmRounterPage);
-    App.use(router)
+    App.use(router);
     App.mount("#app");
   }
 }
