@@ -28,7 +28,6 @@ export class XmRouter {
       delete require.cache[match.filePath];
       // 添加调试信息
       const handler = await import(`file://${match.filePath}`);
-      console.log(`Imported ${match.filePath} successfully`);
       if (typeof handler.default !== "function") {
         return new Response("Invalid route handler", { status: 500 });
       }

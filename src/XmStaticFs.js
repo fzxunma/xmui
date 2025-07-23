@@ -1,4 +1,12 @@
-import { join, resolve, normalize, extname, basename, dirname } from "path";
+import {
+  join,
+  resolve,
+  normalize,
+  extname,
+  basename,
+  dirname,
+  sep,
+} from "path";
 import { stat } from "fs/promises";
 import { XmProject } from "./XmProject.js";
 import { XmCacheFs } from "./XmCacheFs.js";
@@ -35,30 +43,31 @@ export class XmStaticFs {
         XmStaticFs.mimeTypes[ext] || "application/octet-stream";
 
       if (ext === ".js" && absoluteFilePath.endsWith("index.js")) {
-        const dir = absoluteFilePath.slice(
-          0,
-          absoluteFilePath.lastIndexOf("/")
-        );
-        const dirName = dir.slice(dir.lastIndexOf("/") + 1);
-        const specialDirs = ["pages", "components", "views", "layouts"];
-        if (specialDirs.includes(dirName)) {
-          const htmlPath = `${dir}/index.html`;
-          const htmlFile = Bun.file(htmlPath);
-          if (await htmlFile.exists()) {
-            const htmlContent = await htmlFile.text();
-            let jsContent = await file.text();
-            // Replace the last } with }, template: html
-            jsContent = jsContent.replace(
-              /}$/,
-              `, template: \`${htmlContent.replace(/`/g, "\\`")}\`}`
-            );
-            return new Response(jsContent, {
-              headers: { "Content-Type": contentType },
-            });
+        const dir = dirname(absoluteFilePath);
+        const parts = dir.split(sep);
+        if (parts.length > 2) {
+          const dirName = parts[parts.length - 2];
+          const specialDirs = ["pages", "components", "views", "layouts"];
+
+          if (specialDirs.includes(dirName)) {
+            const htmlPath = join(dir, "index.html");
+
+            const htmlFile = Bun.file(htmlPath);
+            if (await htmlFile.exists()) {
+              const htmlContent = await htmlFile.text();
+              let jsContent = await file.text();
+              // Replace }; (with optional whitespace) at the end with , template: html };
+              jsContent = jsContent.replace(
+                /\s*}\s*(;)?\s*$/,
+                `, \ntemplate: \`${htmlContent.replace(/`/g, "\\`")}\` };`
+              );
+              return new Response(jsContent, {
+                headers: { "Content-Type": contentType },
+              });
+            }
           }
         }
       }
-      console.log(`Serving file: ${absoluteFilePath}`);
       return new Response(file, {
         headers: { "Content-Type": contentType },
       });
@@ -67,7 +76,6 @@ export class XmStaticFs {
       const indexPath = join(absoluteFilePath, "index.js");
       const indexFile = Bun.file(indexPath);
       if (await indexFile.exists()) {
-        console.log(`Serving directory index: ${indexPath}`);
         return new Response(indexFile, {
           headers: { "Content-Type": "text/javascript" },
         });
@@ -86,7 +94,7 @@ export class XmStaticFs {
   static async serve(pathname) {
     // 过滤 .well-known 请求（可选，根据需求）
     if (pathname.startsWith("/.well-known")) {
-      console.log(`Ignoring .well-known request: ${pathname}`);
+      //console.log(`Ignoring .well-known request: ${pathname}`);
       return new Response("Not Found", { status: 404 });
     }
 
