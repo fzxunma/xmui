@@ -1,90 +1,212 @@
-XMUI - Web Component UI Library
-XMUI is a lightweight, open-source UI component library built with Web Components (Custom Elements, Shadow DOM, and ES Modules). It provides reusable, framework-agnostic UI components for modern web applications, compatible with any JavaScript framework (React, Vue, Angular, Svelte) or vanilla JavaScript.
-Features
+# XMUI
 
-Framework-Agnostic: Built with native Web Components, works seamlessly in any JavaScript environment.
-Lightweight: Minimal bundle size with zero dependencies.
-Encapsulated Styling: Uses Shadow DOM for isolated CSS, preventing style leaks.
-Customizable: Style components with CSS custom properties or custom stylesheets.
-Accessible: Adheres to WAI-ARIA standards for inclusive design.
-Modular: Import only the components you need for optimal performance.
+XMUI is a zero-configuration Vue.js frontend framework powered by Bun. It provides a seamless development experience for building responsive web applications, with built-in support for PC (using Naive UI) and mobile (using Vant) interfaces. The framework is designed to be lightweight, modular, and easy to extend, allowing developers to focus on building features without worrying about complex setups.
 
-Getting Started
-Installation
-Install XMUI via npm or use it directly via a CDN.
-Via npm
-npm install xmui
+## Features
 
-Via CDN
-Include XMUI in your HTML:
-<script type="module" src="https://unpkg.com/xmui@latest/dist/xmui.min.js"></script>
+- **Zero-Configuration Setup**: Powered by Bun for fast, out-of-the-box development without additional build tools or configurations.
+- **Cross-Platform UI**: Uses Naive UI for desktop/PC interfaces and Vant for mobile/responsive designs, ensuring consistent and adaptive user experiences.
+- **Vue.js Based**: Leverages Vue's reactive ecosystem for efficient component-based architecture.
+- **Modular Structure**: Easily add pages, views, layouts, components, and models to scale your application.
+- **Fast Startup**: Launch your development server with a single command: `bun index.js`.
+- **Customizable and Extensible**: Integrate additional Vue plugins or customize UI libraries as needed.
+- **Accessible and Performant**: Built-in best practices for accessibility and performance optimization.
 
-Usage
-XMUI components are ready to use as custom HTML elements. Below is an example with the <xmui-button> component.
-Example
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>XMUI Example</title>
-  <script type="module" src="https://unpkg.com/xmui@latest/dist/xmui.min.js"></script>
-</head>
-<body>
-  <xmui-button variant="primary">Click Me</xmui-button>
+## Installation
 
-  <script>
-    const button = document.querySelector('xmui-button');
-    button.addEventListener('click', () => alert('Hello from XMUI!'));
+### Prerequisites
+- Install Bun: Follow the official [Bun installation guide](https://bun.sh/docs/installation) for your platform.
+
+### Via GitHub
+Clone the repository and install dependencies:
+
+```bash
+git clone https://github.com/fzxunma/xmui.git
+cd xmui
+bun install
+```
+
+## Usage
+
+### Starting the Development Server
+Run the following command to start the server:
+
+```bash
+bun index.js
+```
+
+This will launch the application in development mode. Open your browser to `http://localhost:3000` (or the specified port) to view it.
+
+### Adding Elements to Your Project
+
+XMUI follows a structured directory convention for organizing your application. Below are instructions for adding common elements:
+
+#### 6. Adding a Page
+Pages are the main routes in your application. Create a new page in the `src/pages` directory:
+
+1. Create a file like `src/pages/MyPage.vue`.
+2. Define your Vue component:
+   ```vue
+   <template>
+     <div>My Page Content</div>
+   </template>
+
+   <script setup>
+   // Your script logic here
+   </script>
+
+   <style scoped>
+   /* Your styles here */
+   </style>
+   ```
+3. Register the page in your router (e.g., `src/router/index.js`):
+   ```javascript
+   import MyPage from '@/pages/MyPage.vue';
+
+   const routes = [
+     { path: '/my-page', component: MyPage },
+   ];
+   ```
+
+#### 7. Adding a View
+Views are reusable sections or partials within pages. Create a new view in the `src/views` directory:
+
+1. Create a file like `src/views/MyView.vue`.
+2. Define your Vue component similar to a page:
+   ```vue
+   <template>
+     <div>My View Content</div>
+   </template>
+
+   <script setup>
+   // View-specific logic
+   </script>
+   ```
+3. Import and use it in a page or layout:
+   ```vue
+   <template>
+     <MyView />
+   </template>
+   <script setup>
+   import MyView from '@/views/MyView.vue';
+   </script>
+   ```
+
+#### 8. Adding a Layout
+Layouts provide reusable wrappers (e.g., headers, footers) for pages. Create a new layout in the `src/layouts` directory:
+
+1. Create a file like `src/layouts/MyLayout.vue`.
+2. Define the layout with a slot for content:
+   ```vue
+   <template>
+     <div class="layout">
+       <header>Header</header>
+       <slot /> <!-- Page content goes here -->
+       <footer>Footer</footer>
+     </div>
+   </template>
+
+   <style scoped>
+   /* Layout styles */
+   </style>
+   ```
+3. Apply it in your router or page:
+   ```javascript
+   const routes = [
+     { path: '/my-page', component: MyPage, meta: { layout: 'MyLayout' } },
+   ];
+   ```
+
+#### 9. Adding a Component
+Components are reusable UI building blocks. Create a new component in the `src/components` directory:
+
+1. Create a file like `src/components/MyComponent.vue`.
+2. Define the component:
+   ```vue
+   <template>
+     <div>My Component</div>
+   </template>
+
+   <script setup>
+   // Component props and logic
+   </script>
+
+   <style scoped>
+   /* Component styles */
+   </style>
+   ```
+3. Import and use it anywhere:
+   ```vue
+   <template>
+     <MyComponent />
+   </template>
+   <script setup>
+   import MyComponent from '@/components/MyComponent.vue';
+   </script>
+   ```
+
+   - For PC: Use Naive UI components (e.g., `<n-button>` from `naive-ui`).
+   - For Mobile: Use Vant components (e.g., `<van-button>` from `vant`).
+
+#### 10. Adding a Model
+Models handle data structures and logic (e.g., API interactions). Create a new model in the `src/models` directory:
+
+1. Create a file like `src/models/MyModel.js`.
+2. Define the model class or functions:
+   ```javascript
+   export class MyModel {
+     constructor(data) {
+       this.data = data;
+     }
+
+     async fetchData() {
+       // API call or data logic
+       return fetch('/api/data').then(res => res.json());
+     }
+   }
+   ```
+3. Use it in your components or views:
+   ```vue
+   <script setup>
+   import { MyModel } from '@/models/MyModel';
+   const model = new MyModel();
+   model.fetchData().then(data => console.log(data));
+   </script>
+   ```
+
+## Styling and Customization
+
+- **PC/Desktop**: Leverage Naive UI for professional, customizable UI elements. Import and use as needed:
+  ```vue
+  <script setup>
+  import { NButton } from 'naive-ui';
   </script>
-</body>
-</html>
+  ```
 
-In a Framework
-XMUI works with any JavaScript framework. Example in React:
-import 'xmui/dist/xmui.min.js'; // Import Web Components
+- **Mobile**: Use Vant for touch-friendly components:
+  ```vue
+  <script setup>
+  import { VanButton } from 'vant';
+  </script>
+  ```
 
-function App() {
-  return <xmui-button variant="primary">React Button</xmui-button>;
-}
+Customize globally via CSS variables or theme configurations in the respective libraries.
 
-export default App;
+## Contributing
 
-Available Components
+We welcome contributions! To get started:
 
-<xmui-button>: A versatile button with variants (primary, secondary, outline).
-<xmui-input>: A customizable input with validation support.
-<xmui-modal>: A responsive, accessible modal dialog.
-<xmui-card>: A flexible card component for content display.
-Explore more in our documentation.
+1. Fork the repository.
+2. Create a new feature branch (`git checkout -b feature/YourFeature`).
+3. Commit your changes (`git commit -m 'Add YourFeature'`).
+4. Push to the branch (`git push origin feature/YourFeature`).
+5. Open a Pull Request.
 
-Styling
-Customize XMUI components using CSS custom properties or by targeting the Shadow DOM.
-xmui-button {
-  --xmui-primary-bg: #1e90ff;
-  --xmui-border-radius: 6px;
-}
+Please review the [Contributing Guidelines](CONTRIBUTING.md) (if available) for more details.
 
-/* Advanced: Style Shadow DOM */
-xmui-button::part(base) {
-  font-size: 16px;
-}
+- Report bugs or request features via [GitHub Issues](https://github.com/fzxunma/xmui/issues).
+- Join discussions on [GitHub Discussions](https://github.com/fzxunma/xmui/discussions).
 
-Contributing
-We welcome contributions to XMUI! To contribute:
+## License
 
-Fork the repository.
-Create a feature branch (git checkout -b feat/your-feature).
-Commit your changes (git commit -m "Add your feature").
-Push to the branch (git push origin feat/your-feature).
-Open a Pull Request.
-
-See our Contributing Guidelines for more details.
-License
-XMUI is licensed under the MIT License. You are free to use, modify, and distribute this library, provided the original copyright and license notice are included.
-Documentation
-Visit our official documentation for detailed guides, API references, and examples.
-Community
-
-GitHub Issues: Report bugs or request features on our GitHub repository.
-Discussions: Join the conversation in our GitHub Discussions.
-Twitter: Follow us at @xmui for updates.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
