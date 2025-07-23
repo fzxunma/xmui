@@ -23,7 +23,6 @@ Clone the repository and install dependencies:
 ```bash
 git clone https://github.com/fzxunma/xmui.git
 cd xmui
-bun install
 ```
 
 ## Usage
