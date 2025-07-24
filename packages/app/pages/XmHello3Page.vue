@@ -1,7 +1,28 @@
 <script>
 import { ref } from 'vue';
-
+import XmCard2_2_3 from "../components/XmCard2_2_3.vue";
+import XmCard1_1_1 from "../components/XmCard1_1_1.vue";
+import XmCard1_2s_1 from "../components/XmCard1_2s_1.vue";
+import XmCard1s_2s_1 from "../components/XmCard1s_2s_1.vue";
+import XmCard1_1_1_1 from "../components/XmCard1_1_1_1.vue";
+import XmCard1_1_1_1_1 from "../components/XmCard1_1_1_1_1.vue";
+import XmCard1_2_1_2 from "../components/XmCard1_2_1_2.vue";
+import XmCard1_2 from "../components/XmCard1_2.vue";
+import XmCard2_1 from "../components/XmCard2_1.vue";
+import XmCard3_3 from "../components/XmCard3_3.vue";
 export default {
+  components: {
+    XmCard2_2_3,
+    XmCard1_1_1,
+    XmCard1_2s_1,
+    XmCard1s_2s_1,
+    XmCard1_1_1_1,
+    XmCard1_1_1_1_1,
+    XmCard1_2_1_2,
+    XmCard1_2,
+    XmCard2_1,
+    XmCard3_3
+  },
   setup() {
     const count = ref(0);
     const increment = () => {
@@ -12,54 +33,16 @@ export default {
 };
 </script>
 <template>
-  <div class="border-solid  flex flex-col w-full sm:w-full md:w-64 lg:w-64 xl:w-64 h-100  p-2 m-4 justify-center items-center text-center rounded-lg">
-      <div>三行卡片模板</div>
-      <div class="border-solid border-b-0  bg-purple-100   w-full h-full  flex items-center justify-center">
-          第一行内容
-      </div>
-      <div class="border-solid border-b-0  bg-purple-200   w-full h-full  flex items-center justify-center">
-          第二行内容
-      </div>
-      <div class="border-solid  bg-purple-300 flex items-center justify-center w-full h-full">
-          第三行内容
-      </div>
-  </div>
-
-  <div class="border-solid  flex flex-col w-full sm:w-full md:w-64 lg:w-64 xl:w-64 p-2 h-100 m-4 justify-center items-center text-center rounded-lg">
-   <div>两行卡片模板</div>
-    <div class="border-solid border-b-0  bg-blue-100   w-full h-10   items-center justify-center">
-      第一行内容
-    </div>
-    <div class="border-solid  bg-blue-200 flex-1 items-center justify-center w-full h-40 overflow-y-auto">
-      <div v-for="i in 100" :key='i'>第二行内容</div>
-    </div>
-    <div class="border-solid border-b-0  bg-blue-100   w-full h-10   items-center justify-center">
-      第一行内容
-    </div>
-  </div>
-
-  <div
-    class="border-solid flex flex-col w-full sm:w-full md:w-64 lg:w-64 xl:w-64 p-2 h-100 m-4 justify-center items-center text-center rounded-lg"
-  >
-    <div>两行卡片模板</div>
-    <div
-      class="flex flex-row border-solid w-full bg-blue-100 h-10 overflow-y-hidden overflow-x-auto"
-    >
-      <div v-for="i in 300" :key="i" class="flex-none w-24">第二</div>
-    </div>
-    <div
-      class="w-full border-solid border-b-0 bg-purple-200 h-60 flex flex-row items-center justify-center"
-    >
-      <div class="w-1/3 border-solid border-b-0 bg-purple-200 h-60 overflow-y-auto">
-        <div v-for="i in 300" :key="i">第二</div>
-      </div>
-      <div class="h-full flex flex-col flex-1 items-center justify-center h-60 overflow-y-auto">
-        <div v-for="i in 300" :key="i">第二行内容</div>
-      </div>
-    </div>
-
-    <div class="w-full border-solid border-b-0 bg-blue-100 h-10 items-center justify-center">
-      第一行内容
-    </div>
+  <div class="flex flex-row  justify-center flex-wrap">
+    <XmCard1_1_1></XmCard1_1_1>
+    <XmCard1_2s_1></XmCard1_2s_1>
+    <XmCard1s_2s_1></XmCard1s_2s_1>
+    <XmCard1_1_1_1></XmCard1_1_1_1>
+    <XmCard1_1_1_1_1></XmCard1_1_1_1_1>
+    <XmCard1_2_1_2></XmCard1_2_1_2>
+    <XmCard1_2></XmCard1_2>
+    <XmCard2_1></XmCard2_1>
+    <XmCard3_3></XmCard3_3>
+    <XmCard2_2_3></XmCard2_2_3>
   </div>
 </template>
