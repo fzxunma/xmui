@@ -21,7 +21,7 @@ export default {
       }
       const result = flatTreeNodes.value.filter(node => {
         console.log('Filter node:', node, 'parentId:', String(node.parentId), 'selectedKey:', selectedKeys.value[0]);
-        if (selectedKeys.value.length === 0) return true; // Show all nodes if no selection
+        if (selectedKeys.value.length === 0) return true;
         return String(node.parentId) === String(selectedKeys.value[0]);
       });
       console.log('Filtered tree nodes:', result);
@@ -173,12 +173,13 @@ export default {
       showTreeModal.value = true;
     };
 
-    const handleTreeSave = async () => {
+      const handleTreeSave = async () => {
       const input = {
         name: currentTreeNode.value.name,
         key: currentTreeNode.value.key,
-        parentId: currentTreeNode.value.parentId
+        parentId: currentTreeNode.value.parentId !== null ? String(currentTreeNode.value.parentId) : null
       };
+      console.log('Sending mutation with input:', input); // Debug client input
       let query = '';
       let variables = {};
       if (isTreeEdit.value) {
@@ -211,7 +212,6 @@ export default {
       selectedKeys.value = [];
       fetchAllData();
     };
-
     const handleTreeDelete = async (node) => {
       await graphQLFetch(`
         mutation($id: ID!) {
@@ -256,6 +256,7 @@ export default {
 </script>
 
 <template>
+  <div class="max-w-4xl mx-auto bg-white shadow-lg rounded-lg p-6">
     <h1 class="text-2xl font-bold mb-4 text-center text-blue-600">Tree Management</h1>
     <div v-if="loading" class="flex justify-center mt-4">
       <n-spin size="large" />
@@ -284,7 +285,7 @@ export default {
         </pre>
       </div>
       <!-- Tree Table for CRUD (Right) -->
-      <div style="flex: 3; max-height: 600px; overflow-y: auto; padding: 10px; border: 1px solid #e5e7eb;">
+      <div style="flex: 1; max-height: 600px; overflow-y: auto; padding: 10px; border: 1px solid #e5e7eb;">
         <h2 class="text-xl font-semibold mb-2">Tree Nodes</h2>
         <n-button type="success" class="mb-4 bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded"
           @click="openTreeAdd">
@@ -294,14 +295,21 @@ export default {
           :columns="treeColumns" 
           :data="filteredTreeNodes || []" 
           :bordered="true" 
-          :row-key="(row) => row.value"
-          :checked-row-keys="selectedKeys"
+          :max-height="400" 
+          :min-height="300" 
+          :scroll-x="600" 
+          :row-key="(row) => row.id" 
           :single-line="false"
+          :key="filteredTreeNodes?.length"
           @update:checked-row-keys="handleTableSelect"
         />
         <p v-if="filteredTreeNodes && !filteredTreeNodes.length" class="text-gray-500 mt-2">
           {{ selectedKeys.length ? 'No child nodes for selected node.' : 'No nodes available.' }}
         </p>
+        <!-- Debug: Display filteredTreeNodes -->
+        <pre v-if="filteredTreeNodes && filteredTreeNodes.length" class="mt-2 bg-gray-100 p-2 rounded text-sm">
+          {{ JSON.stringify(filteredTreeNodes, null, 2) }}
+        </pre>
         <n-modal v-model:show="showTreeModal" preset="card" :title="isTreeEdit ? 'Edit Node' : 'Add Node'" style="width: 600px;">
           <n-form>
             <n-form-item label="Name">
@@ -310,8 +318,19 @@ export default {
             <n-form-item label="Key">
               <n-input v-model:value="currentTreeNode.key" placeholder="Enter key" />
             </n-form-item>
-            <n-form-item label="Parent">
-              <n-tree-select v-model:value="currentTreeNode.parentId" :options="flatTreeNodes" placeholder="Select parent" clearable />
+            <n-form-item label="Parent" v-if="isTreeEdit">
+              <n-tree-select 
+                v-model:value="currentTreeNode.parentId" 
+                :options="flatTreeNodes" 
+                placeholder="Select parent" 
+                clearable 
+              />
+            </n-form-item>
+            <n-form-item label="Parent" v-else>
+              <n-input 
+                :value="selectedKeys.length ? flatTreeNodes.find(n => n.value === selectedKeys[0])?.label || 'None' : 'None'" 
+                disabled 
+              />
             </n-form-item>
           </n-form>
           <template #footer>
@@ -321,6 +340,7 @@ export default {
         </n-modal>
       </div>
     </div>
+  </div>
 </template>
 
 <style scoped>

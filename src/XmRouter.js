@@ -3,7 +3,7 @@ import { watch } from "fs/promises";
 import { XmProject } from "./XmProject.js";
 import { XmDb } from "./XmDb.js";
 import { XmStaticFs } from "./XmStaticFs.js";
-import { createYoga, createSchema } from 'graphql-yoga';
+import { createYoga, createSchema } from "graphql-yoga";
 
 export class XmRouter {
   static router = new FileSystemRouter({
@@ -42,7 +42,6 @@ export class XmRouter {
         }
 
         type Query {
-          products: [Product!]!
           tree: TreeNode
           flatTreeNodes: [TreeNode!]!
           listItems(listId: String = "default_list"): [ListItem!]!
@@ -60,7 +59,7 @@ export class XmRouter {
       resolvers: {
         Query: {
           tree: () => {
-            const typeMap = XmDb.cache.get('tree_node');
+            const typeMap = XmDb.cache.get("tree_node");
             if (!typeMap) return null;
             let root_id = null;
             let root_data = null;
@@ -78,27 +77,27 @@ export class XmRouter {
               parentId: null,
               name: root_data.name,
               key: root_data.key,
-              children: [] // Let TreeNode.children resolver populate this
+              children: [], // Let TreeNode.children resolver populate this
             };
           },
           flatTreeNodes: () => {
-            const typeMap = XmDb.cache.get('tree_node') || new Map();
+            const typeMap = XmDb.cache.get("tree_node") || new Map();
             return Array.from(typeMap.entries()).map(([id, data]) => ({
               id,
               parentId: data.pid,
               name: data.name,
-              key: data.key
+              key: data.key,
             }));
           },
           listItems: (_, { listId }) => {
-            const typeMap = XmDb.cache.get('list_item') || new Map();
+            const typeMap = XmDb.cache.get("list_item") || new Map();
             const items = [];
             for (const [id, data] of typeMap.entries()) {
               if (data.key === listId) {
                 items.push({
                   id,
                   value: data.name,
-                  listId: data.key
+                  listId: data.key,
                 });
               }
             }
@@ -107,30 +106,53 @@ export class XmRouter {
         },
         Mutation: {
           createTreeNode: (_, { input }) => {
-            const typeMap = XmDb.cache.get('tree_node') || new Map();
+            console.log(
+              "createTreeNode input:",
+              JSON.stringify(input, null, 2)
+            );
+            const typeMap = XmDb.cache.get("tree_node") || new Map();
             const id = String(Date.now());
             const data = {
-              pid: input.parentId || null,
+              pid:
+                input.parentId !== undefined && input.parentId !== null
+                  ? String(input.parentId)
+                  : null,
               name: input.name,
-              key: input.key || ''
+              key: input.key || "",
             };
             typeMap.set(id, data);
-            XmDb.cache.set('tree_node', typeMap);
-            return { id, parentId: data.pid, name: data.name, key: data.key };
+            XmDb.cache.set("tree_node", typeMap);
+            // Verify cache state
+            const updatedTypeMap = XmDb.cache.get("tree_node");
+            console.log(
+              "Cache after set:",
+              JSON.stringify(updatedTypeMap.get(id), null, 2)
+            );
+            const result = {
+              id,
+              parentId: data.pid,
+              name: data.name,
+              key: data.key,
+            };
+            console.log(
+              "createTreeNode result:",
+              JSON.stringify(result, null, 2)
+            );
+            return result;
           },
           updateTreeNode: (_, { id, input }) => {
-            const typeMap = XmDb.cache.get('tree_node') || new Map();
+            const typeMap = XmDb.cache.get("tree_node") || new Map();
             const data = typeMap.get(id);
-            if (!data) throw new Error('TreeNode not found');
+            if (!data) throw new Error("TreeNode not found");
             if (input.name) data.name = input.name;
             if (input.key !== undefined) data.key = input.key;
             if (input.parentId !== undefined) data.pid = input.parentId;
             typeMap.set(id, data);
-            XmDb.cache.set('tree_node', typeMap);
+            XmDb.cache.set("tree_node", typeMap);
             return { id, parentId: data.pid, name: data.name, key: data.key };
           },
           deleteTreeNode: (_, { id }) => {
-            const typeMap = XmDb.cache.get('tree_node') || new Map();
+            const typeMap = XmDb.cache.get("tree_node") || new Map();
             if (!typeMap.has(id)) return false;
 
             // Recursive delete children
@@ -144,34 +166,34 @@ export class XmRouter {
             };
 
             deleteRecursive(id);
-            XmDb.cache.set('tree_node', typeMap);
+            XmDb.cache.set("tree_node", typeMap);
             return true;
           },
           createListItem: (_, { input }) => {
-            const typeMap = XmDb.cache.get('list_item') || new Map();
+            const typeMap = XmDb.cache.get("list_item") || new Map();
             const id = String(Date.now());
             const data = {
               name: input.value,
-              key: input.listId || 'default_list'
+              key: input.listId || "default_list",
             };
             typeMap.set(id, data);
-            XmDb.cache.set('list_item', typeMap);
+            XmDb.cache.set("list_item", typeMap);
             return { id, value: data.name, listId: data.key };
           },
           updateListItem: (_, { id, input }) => {
-            const typeMap = XmDb.cache.get('list_item') || new Map();
+            const typeMap = XmDb.cache.get("list_item") || new Map();
             const data = typeMap.get(id);
-            if (!data) throw new Error('ListItem not found');
+            if (!data) throw new Error("ListItem not found");
             if (input.value) data.name = input.value;
             if (input.listId) data.key = input.listId;
             typeMap.set(id, data);
-            XmDb.cache.set('list_item', typeMap);
+            XmDb.cache.set("list_item", typeMap);
             return { id, value: data.name, listId: data.key };
           },
           deleteListItem: (_, { id }) => {
-            const typeMap = XmDb.cache.get('list_item') || new Map();
+            const typeMap = XmDb.cache.get("list_item") || new Map();
             if (typeMap.delete(id)) {
-              XmDb.cache.set('list_item', typeMap);
+              XmDb.cache.set("list_item", typeMap);
               return true;
             }
             return false;
@@ -180,7 +202,7 @@ export class XmRouter {
         TreeNode: {
           parentId: (source) => source.pid || null,
           children: (source) => {
-            const typeMap = XmDb.cache.get('tree_node') || new Map();
+            const typeMap = XmDb.cache.get("tree_node") || new Map();
             const children = [];
             for (const [id, data] of typeMap.entries()) {
               if (data.pid === source.id) {
@@ -188,21 +210,21 @@ export class XmRouter {
                   id,
                   pid: data.pid,
                   name: data.name,
-                  key: data.key
+                  key: data.key,
                 });
               }
             }
             return children;
           },
-        }
-      }
-    })
+        },
+      },
+    }),
   });
 
   static async setup(req) {
     const url = new URL(req.url);
     const pathname = url.pathname;
-    if (pathname.startsWith('/graphql')) {
+    if (pathname.startsWith("/graphql")) {
       return await XmRouter.yoga.handle(req);
     }
     const match = XmRouter.router.match(pathname);
