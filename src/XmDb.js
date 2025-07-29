@@ -10,15 +10,15 @@ export class XmDb {
   };
 
   static async init() {
-    // 为每个已知类型确保表存在
+    // Ensure tables and migrate schemas
     for (const type of XmDb.knownTypes) {
       await XmDb.ensureTable(type);
     }
 
-    // 检查是否已初始化数据
+    // Check if data is initialized
     let totalCount = 0;
     for (const type of XmDb.knownTypes) {
-      const countRow = XmDb.db.prepare(`SELECT COUNT(*) as count FROM \`${type}\` WHERE delete_time IS NULL`).get();
+      const countRow = XmDb.db.prepare(`SELECT COUNT(*) as count FROM \`${type}\` WHERE delete_time IS NULL OR delete_time IS NOT NULL`).get();
       totalCount += countRow.count;
     }
 
@@ -28,20 +28,23 @@ export class XmDb {
     }
 
     console.log("Initializing data...");
-    // 初始化树形结构模拟数据 (type: 'tree_node')
-    const root = await XmDb.create("tree_node", null);
+    // Initialize tree_node
+    const root = await XmDb.create("tree_node", null, "Root", "");
     const rootId = root.id;
     const childIds = [];
     for (let i = 1; i <= 5; i++) {
-      const child = await XmDb.create("tree_node", rootId);
+      const child = await XmDb.create("tree_node", rootId, `Child-${i}`, "");
       childIds.push(child.id);
+      // Create corresponding list_item
+      await XmDb.create("list_item", rootId, `Item-Child-${i}`, `list_${child.id}`, ["name"]);
     }
-    // 添加二级子节点示例
-    await XmDb.create("tree_node", childIds[0]);
+    // Add Subchild-1
+    const subchild = await XmDb.create("tree_node", childIds[0], "Subchild-1", "");
+    await XmDb.create("list_item", childIds[0], "Item-Subchild-1", `list_${subchild.id}`, ["name"]);
 
-    // 初始化列表数据模拟数据 (type: 'list_item')
-    for (let i = 1; i <= 10; i++) {
-      await XmDb.create("list_item", null, `Item-${i}`, "default_list");
+    // Initialize additional list_item data
+    for (let i = 1; i <= 5; i++) {
+      await XmDb.create("list_item", null, `Item-${i}`, "default_list", ["name"]);
     }
 
     console.log("Data initialization completed.");
@@ -55,6 +58,17 @@ export class XmDb {
     if (!tableExists) {
       console.log(`Table '${type}' does not exist, creating...`);
       XmDb.db.run(`CREATE TABLE \`${type}\` (${XmDb.schema[type]})`);
+    } else if (type === "list_item") {
+      // Migrate list_item table to add missing columns
+      const columns = XmDb.db.prepare(`PRAGMA table_info(\`${type}\`)`).all();
+      const columnNames = columns.map(c => c.name);
+      const requiredColumns = ["create_time", "update_time", "delete_time"];
+      for (const col of requiredColumns) {
+        if (!columnNames.includes(col)) {
+          console.log(`Adding column ${col} to ${type}...`);
+          XmDb.db.run(`ALTER TABLE \`${type}\` ADD COLUMN ${col} TIMESTAMP DEFAULT ${col === "delete_time" ? "NULL" : "CURRENT_TIMESTAMP"}`);
+        }
+      }
     }
 
     if (!XmDb.cache.has(type)) {
@@ -66,7 +80,7 @@ export class XmDb {
     const rows = XmDb.db.prepare(`SELECT * FROM \`${type}\` WHERE delete_time IS NULL`).all();
     const innerMap = new Map();
     for (const row of rows) {
-      innerMap.set(row.id, row);
+      innerMap.set(String(row.id), row);
     }
     XmDb.cache.set(type, innerMap);
   }
@@ -78,26 +92,26 @@ export class XmDb {
   // 通用 CRUD 方法
   static async create(type, pid, name, key, uniqueFields = []) {
     await XmDb.ensureTable(type);
-    // Unique check
+    // Unique key check
     if (uniqueFields.length > 0) {
       const fields = uniqueFields.map(f => `${f} = ?`).join(' AND ');
-      const values = uniqueFields.map(f => eval(f)); // Simplified, use actual values
-      const existing = XmDb.db.prepare(`SELECT * FROM \`${type}\` WHERE ${fields}`).get(...values);
+      const values = uniqueFields.map(f => name || key); // Simplified; use actual field values
+      const existing = XmDb.db.prepare(`SELECT * FROM \`${type}\` WHERE ${fields} AND delete_time IS NULL`).get(...values);
       if (existing) {
         throw new Error(`Unique constraint violation for fields: ${uniqueFields.join(', ')}`);
       }
     }
     const stmt = XmDb.db.prepare(
-      `INSERT INTO \`${type}\` (pid, name, key) VALUES (?, ?, ?) RETURNING *`
+      `INSERT INTO \`${type}\` (pid, name, key, create_time, update_time) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING *`
     );
     const row = stmt.get(pid, name, key);
-    XmDb.cache.get(type).set(row.id, row);
+    XmDb.cache.get(type).set(String(row.id), row);
     return row;
   }
 
   static async read(type, id) {
     await XmDb.ensureTable(type);
-    return XmDb.cache.get(type)?.get(id) ?? null;
+    return XmDb.cache.get(type)?.get(String(id)) ?? null;
   }
 
   static async update(type, id, updates) {
@@ -109,27 +123,27 @@ export class XmDb {
     const values = Object.values(updates);
     values.push(id);
     XmDb.db.run(
-      `UPDATE \`${type}\` SET ${fields}, update_time = CURRENT_TIMESTAMP WHERE id = ?`,
+      `UPDATE \`${type}\` SET ${fields}, update_time = CURRENT_TIMESTAMP WHERE id = ? AND delete_time IS NULL`,
       [...values]
     );
-    XmDb.cache.get(type).set(id, updatedData);
+    XmDb.cache.get(type).set(String(id), updatedData);
     return updatedData;
   }
 
   static async delete(type, id, soft = true) {
     await XmDb.ensureTable(type);
     if (soft) {
-      XmDb.db.run(`UPDATE \`${type}\` SET delete_time = CURRENT_TIMESTAMP WHERE id = ?`, [id]);
+      XmDb.db.run(`UPDATE \`${type}\` SET delete_time = CURRENT_TIMESTAMP WHERE id = ? AND delete_time IS NULL`, [id]);
       const typeMap = XmDb.cache.get(type);
       if (typeMap) {
-        typeMap.delete(id);
+        typeMap.delete(String(id));
       }
       return true;
     } else {
       XmDb.db.run(`DELETE FROM \`${type}\` WHERE id = ?`, [id]);
       const typeMap = XmDb.cache.get(type);
       if (typeMap) {
-        typeMap.delete(id);
+        typeMap.delete(String(id));
         if (typeMap.size === 0) {
           XmDb.cache.delete(type);
         }
@@ -166,41 +180,41 @@ export class XmDb {
     }
   }
 
-  // 示例：从 GraphQL 同步数据到本地数据库（假设 GraphQL 返回特定格式的数据）
   static async syncFromGraphQL(endpoint, query, variables = {}, type, mappingFn) {
     const data = await this.fetchGraphQL(endpoint, query, variables);
-    const items = mappingFn(data); // mappingFn 用于提取和映射数据
+    const items = mappingFn(data);
     for (const item of items) {
-      await this.create(type, item.pid, item.name, item.key);
+      await this.create(type, item.pid, item.name, item.key, item.uniqueFields || []);
     }
     console.log(`Synced ${items.length} items to type '${type}' from GraphQL.`);
   }
 
   // 树形结构专用方法 (type: 'tree_node')
-  // 创建树节点
-  static async createTreeNode(pid = null) {
-    return XmDb.create("tree_node", pid);
+  static async createTreeNode(pid = null, name = "", key = "") {
+    const treeNode = await XmDb.create("tree_node", pid, name, key);
+    // Create corresponding list_item
+    await XmDb.create("list_item", pid, name || `Item-${treeNode.id}`, key || `list_${treeNode.id}`, ["name"]);
+    return treeNode;
   }
 
-  // 获取树节点 (返回 tree_node 和 list_item)
   static async getTreeNode(id) {
     const tree = await XmDb.read("tree_node", id);
     if (!tree) return null;
-    const list = await XmDb.read("list_item", id); // Assume same id
+    const list = await XmDb.read("list_item", id);
     return { tree, list };
   }
 
-  // 更新树节点
   static async updateTreeNode(id, updates) {
     return XmDb.update("tree_node", id, updates);
   }
 
-  // 删除树节点 (软删除)
   static async deleteTreeNode(id) {
-    return XmDb.delete("tree_node", id);
+    // Soft delete tree_node and corresponding list_item
+    await XmDb.delete("tree_node", id);
+    await XmDb.delete("list_item", id);
+    return true;
   }
 
-  // 获取子节点列表
   static async getChildren(parent_id) {
     const typeMap = XmDb.cache.get("tree_node");
     if (!typeMap) return [];
@@ -213,10 +227,8 @@ export class XmDb {
     return children;
   }
 
-  // 构建整个树（从根节点开始，递归）
   static async buildTree(root_id = null) {
     if (root_id === null) {
-      // 如果没有指定root_id，假设找到pid为null的根节点（假设只有一个）
       const typeMap = XmDb.cache.get("tree_node");
       if (!typeMap) return null;
       for (const [id, data] of typeMap) {
@@ -233,7 +245,8 @@ export class XmDb {
       const children = await XmDb.getChildren(node_id);
       return {
         id: node_id,
-        ...node,
+        ...node.tree,
+        list_item: node.list,
         children: await Promise.all(children.map((child) => build(child.id))),
       };
     };
@@ -241,27 +254,22 @@ export class XmDb {
   }
 
   // 列表数据专用方法 (type: 'list_item')
-  // 创建列表项
   static async createListItem(pid, name, key, uniqueFields = []) {
     return XmDb.create("list_item", pid, name, key, uniqueFields);
   }
 
-  // 获取列表项
   static async getListItem(id) {
     return XmDb.read("list_item", id);
   }
 
-  // 更新列表项
   static async updateListItem(id, updates) {
     return XmDb.update("list_item", id, updates);
   }
 
-  // 删除列表项
   static async deleteListItem(id) {
     return XmDb.delete("list_item", id);
   }
 
-  // 分页获取特定列表的所有项
   static async getListItems(list_id = "default_list", page = 1, limit = 10) {
     const offset = (page - 1) * limit;
     const stmt = XmDb.db.prepare(
@@ -270,11 +278,9 @@ export class XmDb {
     return stmt.all(list_id, limit, offset);
   }
 
-  // 根据字段分组创建新 tree_node
   static async groupListItemsToTree(groupByFields) {
     const stmt = XmDb.db.prepare(`SELECT * FROM \`list_item\` WHERE delete_time IS NULL`);
     const items = stmt.all();
-    // Simplified grouping; assume groupByFields is array of fields to group by
     const groups = {};
     for (const item of items) {
       const groupKey = groupByFields.map(f => item[f]).join('-');
@@ -282,7 +288,9 @@ export class XmDb {
       groups[groupKey].push(item);
     }
     for (const group in groups) {
-      await XmDb.create("tree_node", null, group, "");
+      const groupItems = groups[group];
+      const name = group || `Group-${Object.keys(groups).length}`;
+      await XmDb.create("tree_node", null, name, "");
     }
   }
 }
