@@ -1,3 +1,3 @@
-import { create,NButton, NInput, NDatePicker, NConfigProvider } from "naive-ui";
+import naive from 'naive-ui'
 
-export { create,NButton, NInput, NDatePicker, NConfigProvider };
+export default naive;
