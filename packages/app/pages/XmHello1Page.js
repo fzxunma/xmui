@@ -37,7 +37,7 @@ export default {
   },
   template: `
       <div class="p-4">heelo11111
-       <RouterLink to="/pagesv3/hello">Go to Hello</RouterLink>
+       <RouterLink to="/pagesv3/graphql">Go to Hello</RouterLink>
       </div>
     `,
 };
