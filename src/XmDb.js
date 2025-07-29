@@ -5,8 +5,10 @@ export class XmDb {
   static cache = new Map();
   static knownTypes = ["tree_node", "list_item"];
   static schema = {
-    tree_node: "id INTEGER PRIMARY KEY AUTOINCREMENT, pid INTEGER",
-    list_item: "id INTEGER PRIMARY KEY AUTOINCREMENT, pid INTEGER, name TEXT, key TEXT, create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, delete_time TIMESTAMP DEFAULT NULL"
+    tree_node:
+      "id INTEGER PRIMARY KEY AUTOINCREMENT, pid INTEGER, name TEXT, key TEXT, create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, delete_time TIMESTAMP DEFAULT NULL",
+    list_item:
+      "id INTEGER PRIMARY KEY AUTOINCREMENT, pid INTEGER, name TEXT, key TEXT, create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, delete_time TIMESTAMP DEFAULT NULL",
   };
 
   static async init() {
@@ -18,7 +20,11 @@ export class XmDb {
     // Check if data is initialized
     let totalCount = 0;
     for (const type of XmDb.knownTypes) {
-      const countRow = XmDb.db.prepare(`SELECT COUNT(*) as count FROM \`${type}\` WHERE delete_time IS NULL OR delete_time IS NOT NULL`).get();
+      const countRow = XmDb.db
+        .prepare(
+          `SELECT COUNT(*) as count FROM \`${type}\` WHERE delete_time IS NULL OR delete_time IS NOT NULL`
+        )
+        .get();
       totalCount += countRow.count;
     }
 
@@ -36,15 +42,34 @@ export class XmDb {
       const child = await XmDb.create("tree_node", rootId, `Child-${i}`, "");
       childIds.push(child.id);
       // Create corresponding list_item
-      await XmDb.create("list_item", rootId, `Item-Child-${i}`, `list_${child.id}`, ["name"]);
+      await XmDb.create(
+        "list_item",
+        rootId,
+        `Item-Child-${i}`,
+        `list_${child.id}`,
+        ["name"]
+      );
     }
     // Add Subchild-1
-    const subchild = await XmDb.create("tree_node", childIds[0], "Subchild-1", "");
-    await XmDb.create("list_item", childIds[0], "Item-Subchild-1", `list_${subchild.id}`, ["name"]);
+    const subchild = await XmDb.create(
+      "tree_node",
+      childIds[0],
+      "Subchild-1",
+      ""
+    );
+    await XmDb.create(
+      "list_item",
+      childIds[0],
+      "Item-Subchild-1",
+      `list_${subchild.id}`,
+      ["name"]
+    );
 
     // Initialize additional list_item data
     for (let i = 1; i <= 5; i++) {
-      await XmDb.create("list_item", null, `Item-${i}`, "default_list", ["name"]);
+      await XmDb.create("list_item", null, `Item-${i}`, "default_list", [
+        "name",
+      ]);
     }
 
     console.log("Data initialization completed.");
@@ -61,12 +86,16 @@ export class XmDb {
     } else if (type === "list_item") {
       // Migrate list_item table to add missing columns
       const columns = XmDb.db.prepare(`PRAGMA table_info(\`${type}\`)`).all();
-      const columnNames = columns.map(c => c.name);
+      const columnNames = columns.map((c) => c.name);
       const requiredColumns = ["create_time", "update_time", "delete_time"];
       for (const col of requiredColumns) {
         if (!columnNames.includes(col)) {
           console.log(`Adding column ${col} to ${type}...`);
-          XmDb.db.run(`ALTER TABLE \`${type}\` ADD COLUMN ${col} TIMESTAMP DEFAULT ${col === "delete_time" ? "NULL" : "CURRENT_TIMESTAMP"}`);
+          XmDb.db.run(
+            `ALTER TABLE \`${type}\` ADD COLUMN ${col} TIMESTAMP DEFAULT ${
+              col === "delete_time" ? "NULL" : "CURRENT_TIMESTAMP"
+            }`
+          );
         }
       }
     }
@@ -77,7 +106,9 @@ export class XmDb {
   }
 
   static loadTable(type) {
-    const rows = XmDb.db.prepare(`SELECT * FROM \`${type}\` WHERE delete_time IS NULL`).all();
+    const rows = XmDb.db
+      .prepare(`SELECT * FROM \`${type}\` WHERE delete_time IS NULL`)
+      .all();
     const innerMap = new Map();
     for (const row of rows) {
       innerMap.set(String(row.id), row);
@@ -94,11 +125,17 @@ export class XmDb {
     await XmDb.ensureTable(type);
     // Unique key check
     if (uniqueFields.length > 0) {
-      const fields = uniqueFields.map(f => `${f} = ?`).join(' AND ');
-      const values = uniqueFields.map(f => name || key); // Simplified; use actual field values
-      const existing = XmDb.db.prepare(`SELECT * FROM \`${type}\` WHERE ${fields} AND delete_time IS NULL`).get(...values);
+      const fields = uniqueFields.map((f) => `${f} = ?`).join(" AND ");
+      const values = uniqueFields.map((f) => name || key); // Simplified; use actual field values
+      const existing = XmDb.db
+        .prepare(
+          `SELECT * FROM \`${type}\` WHERE ${fields} AND delete_time IS NULL`
+        )
+        .get(...values);
       if (existing) {
-        throw new Error(`Unique constraint violation for fields: ${uniqueFields.join(', ')}`);
+        throw new Error(
+          `Unique constraint violation for fields: ${uniqueFields.join(", ")}`
+        );
       }
     }
     const stmt = XmDb.db.prepare(
@@ -118,8 +155,14 @@ export class XmDb {
     await XmDb.ensureTable(type);
     const existing = await XmDb.read(type, id);
     if (!existing) return null;
-    const updatedData = { ...existing, ...updates, update_time: new Date().toISOString() };
-    const fields = Object.keys(updates).map(k => `${k} = ?`).join(', ');
+    const updatedData = {
+      ...existing,
+      ...updates,
+      update_time: new Date().toISOString(),
+    };
+    const fields = Object.keys(updates)
+      .map((k) => `${k} = ?`)
+      .join(", ");
     const values = Object.values(updates);
     values.push(id);
     XmDb.db.run(
@@ -133,7 +176,10 @@ export class XmDb {
   static async delete(type, id, soft = true) {
     await XmDb.ensureTable(type);
     if (soft) {
-      XmDb.db.run(`UPDATE \`${type}\` SET delete_time = CURRENT_TIMESTAMP WHERE id = ? AND delete_time IS NULL`, [id]);
+      XmDb.db.run(
+        `UPDATE \`${type}\` SET delete_time = CURRENT_TIMESTAMP WHERE id = ? AND delete_time IS NULL`,
+        [id]
+      );
       const typeMap = XmDb.cache.get(type);
       if (typeMap) {
         typeMap.delete(String(id));
@@ -156,9 +202,9 @@ export class XmDb {
   static async fetchGraphQL(endpoint, query, variables = {}, headers = {}) {
     try {
       const response = await fetch(endpoint, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
           ...headers,
         },
         body: JSON.stringify({ query, variables }),
@@ -170,21 +216,33 @@ export class XmDb {
 
       const { data, errors } = await response.json();
       if (errors) {
-        throw new Error(errors.map(e => e.message).join(', '));
+        throw new Error(errors.map((e) => e.message).join(", "));
       }
 
       return data;
     } catch (error) {
-      console.error('GraphQL fetch error:', error);
+      console.error("GraphQL fetch error:", error);
       throw error;
     }
   }
 
-  static async syncFromGraphQL(endpoint, query, variables = {}, type, mappingFn) {
+  static async syncFromGraphQL(
+    endpoint,
+    query,
+    variables = {},
+    type,
+    mappingFn
+  ) {
     const data = await this.fetchGraphQL(endpoint, query, variables);
     const items = mappingFn(data);
     for (const item of items) {
-      await this.create(type, item.pid, item.name, item.key, item.uniqueFields || []);
+      await this.create(
+        type,
+        item.pid,
+        item.name,
+        item.key,
+        item.uniqueFields || []
+      );
     }
     console.log(`Synced ${items.length} items to type '${type}' from GraphQL.`);
   }
@@ -193,7 +251,13 @@ export class XmDb {
   static async createTreeNode(pid = null, name = "", key = "") {
     const treeNode = await XmDb.create("tree_node", pid, name, key);
     // Create corresponding list_item
-    await XmDb.create("list_item", pid, name || `Item-${treeNode.id}`, key || `list_${treeNode.id}`, ["name"]);
+    await XmDb.create(
+      "list_item",
+      pid,
+      name || `Item-${treeNode.id}`,
+      key || `list_${treeNode.id}`,
+      ["name"]
+    );
     return treeNode;
   }
 
@@ -279,11 +343,13 @@ export class XmDb {
   }
 
   static async groupListItemsToTree(groupByFields) {
-    const stmt = XmDb.db.prepare(`SELECT * FROM \`list_item\` WHERE delete_time IS NULL`);
+    const stmt = XmDb.db.prepare(
+      `SELECT * FROM \`list_item\` WHERE delete_time IS NULL`
+    );
     const items = stmt.all();
     const groups = {};
     for (const item of items) {
-      const groupKey = groupByFields.map(f => item[f]).join('-');
+      const groupKey = groupByFields.map((f) => item[f]).join("-");
       if (!groups[groupKey]) groups[groupKey] = [];
       groups[groupKey].push(item);
     }
