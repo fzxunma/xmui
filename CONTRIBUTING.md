@@ -62,6 +62,14 @@ git commit -m "feat: 增加用户登录功能"
 git push origin feature/your-feature-name
 ```
 
+### 4️⃣  等合并完成后,清除开发环境
+
+```bash
+git remote prune origin  
+git branch -d feature/treetable
+
+```
+
 ---
 
 ### 5️⃣ 发起 Pull Request（PR）

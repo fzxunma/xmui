@@ -82447,7 +82447,10 @@ var preset_default = naive;
 var install = naive.install;
 
 // naiveui-entry.js
-var naiveui_entry_default = preset_default;
+var naiveui_entry_default = {
+  ...preset_default,
+  useMessage
+};
 export {
   naiveui_entry_default as default
 };

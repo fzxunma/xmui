@@ -1,5 +1,5 @@
 import { createApp } from "vue";
-import XmRounterPage from "./pages/rounter";
+import XmRounterPage from "./pages/mobileRounter";
 import router from "./router/index.js";
 import { Button, Cell, Toast } from "vant";
 class XmAppWeb {
