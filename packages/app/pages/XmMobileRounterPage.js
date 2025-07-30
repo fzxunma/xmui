@@ -1,7 +1,7 @@
 import { ref } from "vue";
 import { XmCount } from "../components/XmCount2.js";
 export default {
-  name: "XmHelloPage",
+  name: "XmRounterPage",
   components: { XmCount },
   setup() {
     const message = ref("Hello vue!");
@@ -36,8 +36,6 @@ export default {
     return { message, b2Data, users };
   },
   template: `
-      <div class="p-4">heelo11111
-       <RouterLink to="/pagesv3/treeTable">Go to Hello</RouterLink>
-      </div>
+   <router-view />
     `,
 };

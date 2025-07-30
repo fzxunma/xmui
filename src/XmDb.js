@@ -3,360 +3,490 @@ import { Database } from "bun:sqlite";
 export class XmDb {
   static db = new Database("xm", { create: true });
   static cache = new Map();
+  static keyCache = new Map();
   static knownTypes = ["tree_node", "list_item"];
+  static baseFields = `
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pid INTEGER,
+    name TEXT,
+    key TEXT,
+    create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    delete_time TIMESTAMP DEFAULT NULL
+  `;
   static schema = {
-    tree_node:
-      "id INTEGER PRIMARY KEY AUTOINCREMENT, pid INTEGER, name TEXT, key TEXT, create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, delete_time TIMESTAMP DEFAULT NULL",
-    list_item:
-      "id INTEGER PRIMARY KEY AUTOINCREMENT, pid INTEGER, name TEXT, key TEXT, create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, delete_time TIMESTAMP DEFAULT NULL",
+    tree_node: XmDb.baseFields,
+    list_item: XmDb.baseFields,
   };
 
+  static log(message, level = "info") {
+    console[level](`[XmDb] ${message}`);
+  }
+
   static async init() {
-    // Ensure tables and migrate schemas
     for (const type of XmDb.knownTypes) {
       await XmDb.ensureTable(type);
     }
 
-    // Check if data is initialized
     let totalCount = 0;
     for (const type of XmDb.knownTypes) {
       const countRow = XmDb.db
         .prepare(
-          `SELECT COUNT(*) as count FROM \`${type}\` WHERE delete_time IS NULL OR delete_time IS NOT NULL`
+          `SELECT COUNT(*) as count FROM \`${type}\` WHERE delete_time IS NULL`
         )
         .get();
       totalCount += countRow.count;
     }
 
     if (totalCount > 0) {
-      console.log("Data already initialized, skipping.");
+      XmDb.log("Data already initialized, skipping.");
       return;
     }
 
-    console.log("Initializing data...");
-    // Initialize tree_node
-    const root = await XmDb.create("tree_node", null, "Root", "");
-    const rootId = root.id;
-    const childIds = [];
-    for (let i = 1; i <= 5; i++) {
-      const child = await XmDb.create("tree_node", rootId, `Child-${i}`, "");
-      childIds.push(child.id);
-      // Create corresponding list_item
-      await XmDb.create(
-        "list_item",
-        rootId,
-        `Item-Child-${i}`,
-        `list_${child.id}`,
-        ["name"]
-      );
-    }
-    // Add Subchild-1
-    const subchild = await XmDb.create(
-      "tree_node",
-      childIds[0],
-      "Subchild-1",
-      ""
-    );
-    await XmDb.create(
-      "list_item",
-      childIds[0],
-      "Item-Subchild-1",
-      `list_${subchild.id}`,
-      ["name"]
-    );
-
-    // Initialize additional list_item data
-    for (let i = 1; i <= 5; i++) {
-      await XmDb.create("list_item", null, `Item-${i}`, "default_list", [
-        "name",
-      ]);
-    }
-
-    console.log("Data initialization completed.");
-  }
-
-  static async ensureTable(type) {
-    const tableExists = XmDb.db
-      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?")
-      .get(type);
-
-    if (!tableExists) {
-      console.log(`Table '${type}' does not exist, creating...`);
-      XmDb.db.run(`CREATE TABLE \`${type}\` (${XmDb.schema[type]})`);
-    } else if (type === "list_item") {
-      // Migrate list_item table to add missing columns
-      const columns = XmDb.db.prepare(`PRAGMA table_info(\`${type}\`)`).all();
-      const columnNames = columns.map((c) => c.name);
-      const requiredColumns = ["create_time", "update_time", "delete_time"];
-      for (const col of requiredColumns) {
-        if (!columnNames.includes(col)) {
-          console.log(`Adding column ${col} to ${type}...`);
-          XmDb.db.run(
-            `ALTER TABLE \`${type}\` ADD COLUMN ${col} TIMESTAMP DEFAULT ${
-              col === "delete_time" ? "NULL" : "CURRENT_TIMESTAMP"
-            }`
-          );
-        }
-      }
-    }
-
-    if (!XmDb.cache.has(type)) {
-      XmDb.loadTable(type);
-    }
-  }
-
-  static loadTable(type) {
-    const rows = XmDb.db
-      .prepare(`SELECT * FROM \`${type}\` WHERE delete_time IS NULL`)
-      .all();
-    const innerMap = new Map();
-    for (const row of rows) {
-      innerMap.set(String(row.id), row);
-    }
-    XmDb.cache.set(type, innerMap);
-  }
-
-  static async query(sql, params = []) {
-    return XmDb.db.prepare(sql).bind(...params);
-  }
-
-  // 通用 CRUD 方法
-  static async create(type, pid, name, key, uniqueFields = []) {
-    await XmDb.ensureTable(type);
-    // Unique key check
-    if (uniqueFields.length > 0) {
-      const fields = uniqueFields.map((f) => `${f} = ?`).join(" AND ");
-      const values = uniqueFields.map((f) => name || key); // Simplified; use actual field values
-      const existing = XmDb.db
-        .prepare(
-          `SELECT * FROM \`${type}\` WHERE ${fields} AND delete_time IS NULL`
-        )
-        .get(...values);
-      if (existing) {
-        throw new Error(
-          `Unique constraint violation for fields: ${uniqueFields.join(", ")}`
+    XmDb.log("Initializing data...");
+    try {
+      const root = await XmDb.create("tree_node", null, "Root", "");
+      const rootId = root.id;
+      const childIds = [];
+      for (let i = 1; i <= 5; i++) {
+        const child = await XmDb.create("tree_node", rootId, `Child-${i}`, "");
+        childIds.push(child.id);
+        await XmDb.create(
+          "list_item",
+          rootId,
+          `Item-Child-${i}`,
+          `list_${child.id}`,
+          ["name"],
+          [`Item-Child-${i}`]
         );
       }
-    }
-    const stmt = XmDb.db.prepare(
-      `INSERT INTO \`${type}\` (pid, name, key, create_time, update_time) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING *`
-    );
-    const row = stmt.get(pid, name, key);
-    XmDb.cache.get(type).set(String(row.id), row);
-    return row;
-  }
 
-  static async read(type, id) {
-    await XmDb.ensureTable(type);
-    return XmDb.cache.get(type)?.get(String(id)) ?? null;
-  }
-
-  static async update(type, id, updates) {
-    await XmDb.ensureTable(type);
-    const existing = await XmDb.read(type, id);
-    if (!existing) return null;
-    const updatedData = {
-      ...existing,
-      ...updates,
-      update_time: new Date().toISOString(),
-    };
-    const fields = Object.keys(updates)
-      .map((k) => `${k} = ?`)
-      .join(", ");
-    const values = Object.values(updates);
-    values.push(id);
-    XmDb.db.run(
-      `UPDATE \`${type}\` SET ${fields}, update_time = CURRENT_TIMESTAMP WHERE id = ? AND delete_time IS NULL`,
-      [...values]
-    );
-    XmDb.cache.get(type).set(String(id), updatedData);
-    return updatedData;
-  }
-
-  static async delete(type, id, soft = true) {
-    await XmDb.ensureTable(type);
-    if (soft) {
-      XmDb.db.run(
-        `UPDATE \`${type}\` SET delete_time = CURRENT_TIMESTAMP WHERE id = ? AND delete_time IS NULL`,
-        [id]
+      const subchild = await XmDb.create(
+        "tree_node",
+        childIds[0],
+        "Subchild-1",
+        ""
       );
-      const typeMap = XmDb.cache.get(type);
-      if (typeMap) {
-        typeMap.delete(String(id));
-      }
-      return true;
-    } else {
-      XmDb.db.run(`DELETE FROM \`${type}\` WHERE id = ?`, [id]);
-      const typeMap = XmDb.cache.get(type);
-      if (typeMap) {
-        typeMap.delete(String(id));
-        if (typeMap.size === 0) {
-          XmDb.cache.delete(type);
-        }
-      }
-      return true;
-    }
-  }
+      await XmDb.create(
+        "list_item",
+        childIds[0],
+        "Item-Subchild-1",
+        `list_${subchild.id}`,
+        ["name"],
+        ["Item-Subchild-1"]
+      );
 
-  // GraphQL 对接方法
-  static async fetchGraphQL(endpoint, query, variables = {}, headers = {}) {
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...headers,
-        },
-        body: JSON.stringify({ query, variables }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      for (let i = 1; i <= 5; i++) {
+        await XmDb.create(
+          "list_item",
+          null,
+          `Item-${i}`,
+          "default_list",
+          ["name"],
+          [`Item-${i}`]
+        );
       }
-
-      const { data, errors } = await response.json();
-      if (errors) {
-        throw new Error(errors.map((e) => e.message).join(", "));
-      }
-
-      return data;
+      XmDb.log("Data initialization completed.");
     } catch (error) {
-      console.error("GraphQL fetch error:", error);
+      XmDb.log(`Initialization failed: ${error.message}`, "error");
       throw error;
     }
   }
 
-  static async syncFromGraphQL(
-    endpoint,
-    query,
-    variables = {},
-    type,
-    mappingFn
-  ) {
-    const data = await this.fetchGraphQL(endpoint, query, variables);
-    const items = mappingFn(data);
-    for (const item of items) {
-      await this.create(
-        type,
-        item.pid,
-        item.name,
-        item.key,
-        item.uniqueFields || []
-      );
+  static async ensureTable(type) {
+    try {
+      if (!XmDb.schema[type]) throw new Error(`Unknown type: ${type}`);
+      if (!XmDb.cache.has(type)) {
+        XmDb.log(`Ensuring table '${type}' exists...`);
+        XmDb.db.run(
+          `CREATE TABLE IF NOT EXISTS \`${type}\` (${XmDb.schema[type]})`
+        );
+        await XmDb.loadTable(type);
+      }
+    } catch (error) {
+      XmDb.log(`Failed to ensure table ${type}: ${error.message}`, "error");
+      throw error;
     }
-    console.log(`Synced ${items.length} items to type '${type}' from GraphQL.`);
   }
 
-  // 树形结构专用方法 (type: 'tree_node')
+  static async loadTable(type) {
+    try {
+      const rows = XmDb.db
+        .prepare(`SELECT * FROM \`${type}\` WHERE delete_time IS NULL`)
+        .all();
+      const idMap = new Map();
+      const nameMap = new Map();
+      for (const row of rows) {
+        idMap.set(row.id, row);
+        // Only add to nameMap if name is unique and not already present
+        if (row.name && !nameMap.has(row.name)) {
+          nameMap.set(row.name, row);
+        } else if (nameMap.has(row.name)) {
+          XmDb.log(
+            `Duplicate name '${row.name}' in ${type}, skipping keyCache entry`,
+            "warn"
+          );
+        }
+      }
+      XmDb.cache.set(type, { data: idMap, lastUpdated: Date.now() });
+      XmDb.keyCache.set(type, { data: nameMap, lastUpdated: Date.now() });
+      XmDb.log(`Loaded ${rows.length} rows into cache for '${type}'`);
+    } catch (error) {
+      XmDb.log(`Failed to load table ${type}: ${error.message}`, "error");
+      XmDb.cache.set(type, { data: new Map(), lastUpdated: Date.now() });
+      XmDb.keyCache.set(type, { data: new Map(), lastUpdated: Date.now() });
+    }
+  }
+
+  static async create(
+    type,
+    pid,
+    name,
+    key,
+    uniqueFields = [],
+    uniqueValues = []
+  ) {
+    try {
+      await XmDb.ensureTable(type);
+      if (uniqueFields.length !== uniqueValues.length) {
+        throw new Error("Mismatch between uniqueFields and uniqueValues");
+      }
+
+      // 预检查 nameCache，仅当 uniqueFields 只包含 name
+      if (uniqueFields.length === 1 && uniqueFields[0] === "name") {
+        const nameCache = XmDb.keyCache.get(type)?.data;
+        if (nameCache?.has(uniqueValues[0])) {
+          throw new Error(`Unique constraint violation for: name`);
+        }
+      }
+      console.log("create", type, name);
+      // 数据库查询检查所有 uniqueFields
+      if (uniqueFields.length > 0) {
+        const conditions = uniqueFields.map((f) => `${f} = ?`).join(" AND ");
+        const existing = XmDb.db
+          .prepare(
+            `SELECT * FROM \`${type}\` WHERE ${conditions} AND delete_time IS NULL`
+          )
+          .get(...uniqueValues);
+        if (existing) {
+          throw new Error(
+            `Unique constraint violation for: ${uniqueFields.join(", ")}`
+          );
+        }
+      }
+
+      const stmt = XmDb.db.prepare(`
+      INSERT INTO \`${type}\` (pid, name, key, create_time, update_time)
+      VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING *`);
+      const row = stmt.get(pid, name, key);
+      const idCache = XmDb.cache.get(type)?.data;
+      const nameCache = XmDb.keyCache.get(type)?.data;
+      if (idCache && nameCache) {
+        idCache.set(row.id, row);
+        if (row.name && !nameCache.has(row.name)) {
+          nameCache.set(row.name, row);
+        } else if (nameCache.has(row.name)) {
+          XmDb.log(
+            `Duplicate name '${row.name}' in ${type}, skipping keyCache entry`,
+            "warn"
+          );
+        }
+      }
+      return row;
+    } catch (error) {
+      XmDb.log(`Create ${type} failed: ${error.message}`, "error");
+      throw error;
+    }
+  }
+
+  static async read(type, id) {
+    try {
+      await XmDb.ensureTable(type);
+      const cache = XmDb.cache.get(type);
+      if (cache && Date.now() - cache.lastUpdated > 60000) {
+        await XmDb.loadTable(type);
+      }
+      return cache?.data.get(id) ?? null;
+    } catch (error) {
+      XmDb.log(`Read ${type} id ${id} failed: ${error.message}`, "error");
+      throw error;
+    }
+  }
+
+  static async readByName(type, name) {
+    try {
+      await XmDb.ensureTable(type);
+      const cache = XmDb.keyCache.get(type);
+      if (cache && Date.now() - cache.lastUpdated > 60000) {
+        await XmDb.loadTable(type);
+      }
+      return cache?.data.get(name) ?? null;
+    } catch (error) {
+      XmDb.log(
+        `Read ${type} by name ${name} failed: ${error.message}`,
+        "error"
+      );
+      throw error;
+    }
+  }
+
+  static async update(type, id, updates) {
+    try {
+      await XmDb.ensureTable(type);
+      const existing = await XmDb.read(type, id);
+      if (!existing) {
+        throw new Error(`Record with id ${id} not found in ${type}`);
+      }
+
+      const updatedData = {
+        ...existing,
+        ...updates,
+        update_time: new Date(),
+      };
+      const keys = Object.keys(updates);
+      const values = Object.values(updates);
+      XmDb.db.run(
+        `UPDATE \`${type}\` SET ${keys
+          .map((k) => `${k} = ?`)
+          .join(
+            ", "
+          )}, update_time = CURRENT_TIMESTAMP WHERE id = ? AND delete_time IS NULL`,
+        [...values, id]
+      );
+
+      const idCache = XmDb.cache.get(type)?.data;
+      const nameCache = XmDb.keyCache.get(type)?.data;
+      if (idCache && nameCache) {
+        // Remove old name from keyCache if it changed
+        if (updates.name && existing.name !== updates.name) {
+          nameCache.delete(existing.name);
+          if (!nameCache.has(updates.name)) {
+            nameCache.set(updates.name, updatedData);
+          } else {
+            XmDb.log(
+              `Duplicate name '${updates.name}' in ${type}, skipping keyCache update`,
+              "warn"
+            );
+          }
+        }
+        idCache.set(id, updatedData);
+      }
+      return updatedData;
+    } catch (error) {
+      XmDb.log(`Update ${type} id ${id} failed: ${error.message}`, "error");
+      throw error;
+    }
+  }
+
+  static async delete(type, id, soft = true) {
+    try {
+      await XmDb.ensureTable(type);
+      const existing = await XmDb.read(type, id);
+      if (!existing) {
+        throw new Error(`Record with id ${id} not found in ${type}`);
+      }
+
+      const query = soft
+        ? `UPDATE \`${type}\` SET delete_time = CURRENT_TIMESTAMP WHERE id = ? AND delete_time IS NULL`
+        : `DELETE FROM \`${type}\` WHERE id = ?`;
+      XmDb.db.run(query, [id]);
+
+      const idCache = XmDb.cache.get(type)?.data;
+      const nameCache = XmDb.keyCache.get(type)?.data;
+      if (idCache && nameCache) {
+        idCache.delete(id);
+        nameCache.delete(existing.name);
+      }
+      return true;
+    } catch (error) {
+      XmDb.log(`Delete ${type} id ${id} failed: ${error.message}`, "error");
+      throw error;
+    }
+  }
+
   static async createTreeNode(pid = null, name = "", key = "") {
-    const treeNode = await XmDb.create("tree_node", pid, name, key);
-    // Create corresponding list_item
-    await XmDb.create(
-      "list_item",
-      pid,
-      name || `Item-${treeNode.id}`,
-      key || `list_${treeNode.id}`,
-      ["name"]
-    );
-    return treeNode;
+    try {
+      const node = await XmDb.create(
+        "tree_node",
+        pid,
+        name,
+        key,
+        ["name"],
+        [name]
+      );
+      // await XmDb.create(
+      //   "list_item",
+      //   pid,
+      //   name || `Item-${node.id}`,
+      //   key || `list_${node.id}`,
+      //   ["name"],
+      //   [name || `Item-${node.id}`]
+      // );
+      return node;
+    } catch (error) {
+      XmDb.log(`Create tree node failed: ${error.message}`, "error");
+      throw error;
+    }
   }
 
   static async getTreeNode(id) {
-    const tree = await XmDb.read("tree_node", id);
-    if (!tree) return null;
-    const list = await XmDb.read("list_item", id);
-    return { tree, list };
+    try {
+      const tree = await XmDb.read("tree_node", id);
+      const list = await XmDb.read("list_item", id);
+      return { tree, list };
+    } catch (error) {
+      XmDb.log(`Get tree node id ${id} failed: ${error.message}`, "error");
+      throw error;
+    }
   }
 
   static async updateTreeNode(id, updates) {
-    return XmDb.update("tree_node", id, updates);
+    return await XmDb.update("tree_node", id, updates);
   }
 
-  static async deleteTreeNode(id) {
-    // Soft delete tree_node and corresponding list_item
-    await XmDb.delete("tree_node", id);
-    await XmDb.delete("list_item", id);
-    return true;
-  }
-
-  static async getChildren(parent_id) {
-    const typeMap = XmDb.cache.get("tree_node");
-    if (!typeMap) return [];
-    const children = [];
-    for (const [id, data] of typeMap) {
-      if (data.pid === parent_id) {
-        children.push({ id, ...data });
-      }
+  static async deleteTreeNode(id, soft = true) {
+    try {
+      await XmDb.delete("tree_node", id, soft);
+      await XmDb.delete("list_item", id, soft);
+      return true;
+    } catch (error) {
+      XmDb.log(`Delete tree node id ${id} failed: ${error.message}`, "error");
+      throw error;
     }
-    return children;
+  }
+
+  static async getChildren(pid) {
+    try {
+      await XmDb.ensureTable("tree_node");
+      const data = XmDb.cache.get("tree_node")?.data ?? new Map();
+      if (!(data instanceof Map)) {
+        XmDb.log("Cache for tree_node is invalid, reloading...", "warn");
+        await XmDb.loadTable("tree_node");
+      }
+      return [...data.values()].filter((n) => n.pid === pid);
+    } catch (error) {
+      XmDb.log(`Get children for pid ${pid} failed: ${error.message}`, "error");
+      return [];
+    }
   }
 
   static async buildTree(root_id = null) {
-    if (root_id === null) {
-      const typeMap = XmDb.cache.get("tree_node");
-      if (!typeMap) return null;
-      for (const [id, data] of typeMap) {
-        if (data.pid === null) {
-          root_id = id;
-          break;
+    try {
+      await XmDb.ensureTable("tree_node");
+      await XmDb.ensureTable("list_item");
+      const nodes = XmDb.db
+        .prepare("SELECT * FROM `tree_node` WHERE delete_time IS NULL")
+        .all();
+      const lists = XmDb.db
+        .prepare("SELECT * FROM `list_item` WHERE delete_time IS NULL")
+        .all();
+      const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+      const listMap = new Map(lists.map((l) => [l.id, l]));
+
+      if (!root_id) {
+        const rootNode = nodes.find((n) => n.pid === null);
+        if (!rootNode) {
+          XmDb.log("No root node found for tree", "warn");
+          return null;
         }
+        root_id = rootNode.id;
       }
-      if (root_id === null) return null;
-    }
-    const build = async (node_id) => {
-      const node = await XmDb.getTreeNode(node_id);
-      if (!node) return null;
-      const children = await XmDb.getChildren(node_id);
-      return {
-        id: node_id,
-        ...node.tree,
-        list_item: node.list,
-        children: await Promise.all(children.map((child) => build(child.id))),
+
+      const build = (id) => {
+        const node = nodeMap.get(id);
+        if (!node) {
+          XmDb.log(`Node ${id} not found`, "warn");
+          return null;
+        }
+        const children = nodes
+          .filter((n) => n.pid === id)
+          .map((n) => build(n.id))
+          .filter(Boolean);
+        return { ...node, list_item: listMap.get(id), children };
       };
-    };
-    return build(root_id);
+      return build(root_id);
+    } catch (error) {
+      XmDb.log(`Build tree failed: ${error.message}`, "error");
+      return null;
+    }
   }
 
-  // 列表数据专用方法 (type: 'list_item')
-  static async createListItem(pid, name, key, uniqueFields = []) {
-    return XmDb.create("list_item", pid, name, key, uniqueFields);
+  static async createListItem(
+    pid,
+    name,
+    key,
+    uniqueFields = [],
+    uniqueValues = []
+  ) {
+    return await XmDb.create(
+      "list_item",
+      pid,
+      name,
+      key,
+      uniqueFields,
+      uniqueValues
+    );
   }
 
   static async getListItem(id) {
-    return XmDb.read("list_item", id);
+    return await XmDb.read("list_item", id);
+  }
+
+  static async getListItemByName(name) {
+    return await XmDb.readByName("list_item", name);
   }
 
   static async updateListItem(id, updates) {
-    return XmDb.update("list_item", id, updates);
+    return await XmDb.update("list_item", id, updates);
   }
 
-  static async deleteListItem(id) {
-    return XmDb.delete("list_item", id);
+  static async deleteListItem(id, soft = true) {
+    return await XmDb.delete("list_item", id, soft);
   }
 
-  static async getListItems(list_id = "default_list", page = 1, limit = 10) {
-    const offset = (page - 1) * limit;
-    const stmt = XmDb.db.prepare(
-      `SELECT * FROM \`list_item\` WHERE key = ? AND delete_time IS NULL LIMIT ? OFFSET ?`
-    );
-    return stmt.all(list_id, limit, offset);
+  static async getListItems(key = "default_list", page = 1, limit = 10) {
+    try {
+      const offset = (page - 1) * limit;
+      const rows = XmDb.db
+        .prepare(
+          `SELECT * FROM \`list_item\` WHERE key = ? AND delete_time IS NULL LIMIT ? OFFSET ?`
+        )
+        .all(key, limit, offset);
+      const count = XmDb.db
+        .prepare(
+          `SELECT COUNT(*) as count FROM \`list_item\` WHERE key = ? AND delete_time IS NULL`
+        )
+        .get(key).count;
+      return { rows, total: count };
+    } catch (error) {
+      XmDb.log(
+        `Get list items for key ${key} failed: ${error.message}`,
+        "error"
+      );
+      throw error;
+    }
   }
 
   static async groupListItemsToTree(groupByFields) {
-    const stmt = XmDb.db.prepare(
-      `SELECT * FROM \`list_item\` WHERE delete_time IS NULL`
-    );
-    const items = stmt.all();
-    const groups = {};
-    for (const item of items) {
-      const groupKey = groupByFields.map((f) => item[f]).join("-");
-      if (!groups[groupKey]) groups[groupKey] = [];
-      groups[groupKey].push(item);
-    }
-    for (const group in groups) {
-      const groupItems = groups[group];
-      const name = group || `Group-${Object.keys(groups).length}`;
-      await XmDb.create("tree_node", null, name, "");
+    try {
+      const items = XmDb.db
+        .prepare("SELECT * FROM `list_item` WHERE delete_time IS NULL")
+        .all();
+      const groups = {};
+      for (const item of items) {
+        const key = groupByFields.map((f) => item[f]).join("-");
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(item);
+      }
+      for (const groupKey in groups) {
+        const node = await XmDb.create("tree_node", null, groupKey, "");
+        for (const item of groups[groupKey]) {
+          await XmDb.update("list_item", item.id, { pid: node.id });
+        }
+      }
+    } catch (error) {
+      XmDb.log(`Group list items to tree failed: ${error.message}`, "error");
+      throw error;
     }
   }
 }
