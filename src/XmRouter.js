@@ -1,7 +1,8 @@
 import { FileSystemRouter } from "bun";
 import { watch } from "fs/promises";
 import { XmProject } from "./XmProject.js";
-import { XmDb } from "./XmDb.js";
+import XmDbTreeCURD from "./XmDbCRUDTree.js";
+import XmDbListCURD from "./XmDbCRUDList.js";
 import { XmStaticFs } from "./XmStaticFs.js";
 
 export class XmRouter {
@@ -97,8 +98,7 @@ export class XmRouter {
         );
       }
 
-      const { action, data, table } = payload;
-
+      const { action, data, table = "tree" } = payload;
       switch (action) {
         case "tree":
           return await XmRouter.handleTree(req, data, dbName, table);
@@ -106,6 +106,7 @@ export class XmRouter {
           return await XmRouter.handleList(req, data, dbName, table);
         case "add":
           return await XmRouter.handleCreateTreeNode(req, data, dbName, table);
+          break;
         case "edit":
           return await XmRouter.handleUpdateTreeNode(req, data, dbName, table);
         case "delete":
@@ -132,7 +133,14 @@ export class XmRouter {
 
   static async handleTree(req, data, dbName, table) {
     try {
-      const trees = await XmDb.buildTree(0, dbName);
+      const trees = await XmDbTreeCURD.buildTree(
+        0,
+        dbName,
+        Infinity,
+        1,
+        Infinity,
+        table
+      );
       if (!trees || !trees.length) {
         return XmRouter.gzipResponse(
           { code: 404, msg: `No root nodes found in ${dbName}` },
@@ -157,7 +165,7 @@ export class XmRouter {
     }
   }
 
-  static async handleCreateTreeNode(req, data, dbName, table) {
+  static async handleCreateTreeNode(req, data, dbName, treeTable) {
     try {
       if (!data.name || typeof data.name !== "string") {
         return XmRouter.gzipResponse(
@@ -165,8 +173,13 @@ export class XmRouter {
           400
         );
       }
-      const { pid, name, key } = data;
-      const treeNode = await XmDb.createTreeNode(pid, name, key, dbName, table);
+      const { pid = 0, name } = data;
+      const treeNode = await XmDbTreeCURD.createTreeNode(
+        pid,
+        name,
+        dbName,
+        treeTable
+      );
       return XmRouter.gzipResponse(
         {
           code: 0,
@@ -202,7 +215,7 @@ export class XmRouter {
     }
   }
 
-  static async handleUpdateTreeNode(req, data, dbName, table) {
+  static async handleUpdateTreeNode(req, data, dbName, treeTable) {
     try {
       const id = data.id;
       if (!id || !/^\d+$/.test(id)) {
@@ -212,9 +225,15 @@ export class XmRouter {
         );
       }
       const updates = {};
-      if (data.name) updates.name = data.name;
+      if (data.name !== undefined) updates.name = data.name;
       if (data.pid !== undefined) updates.pid = data.pid;
-      const updated = await XmDb.updateTreeNode(id, updates, dbName, table);
+
+      const updated = await XmDbTreeCURD.updateTreeNode(
+        id,
+        updates,
+        dbName,
+        treeTable
+      );
       if (!updated) {
         return XmRouter.gzipResponse(
           { code: 404, msg: `Tree node not found in ${dbName}` },
@@ -251,7 +270,7 @@ export class XmRouter {
     }
   }
 
-  static async handleDeleteTreeNode(req, data, dbName) {
+  static async handleDeleteTreeNode(req, data, dbName, treeTable) {
     try {
       const id = data.id;
       if (!id || !/^\d+$/.test(id)) {
@@ -260,7 +279,12 @@ export class XmRouter {
           400
         );
       }
-      const result = await XmDb.deleteTreeNode(id, true, dbName);
+      const result = await XmDbTreeCURD.deleteTreeNode(
+        id,
+        true,
+        dbName,
+        treeTable
+      );
       if (!result) {
         return XmRouter.gzipResponse(
           { code: 404, msg: `Tree node not found in ${dbName}` },
@@ -293,7 +317,7 @@ export class XmRouter {
       const pid = data.pid || 0;
       const page = data.page || 1;
       const limit = data.limit || 10;
-      const listItems = await XmDb.getListItems(
+      const listItems = await XmDbListCURD.getListItems(
         pid,
         page,
         limit,
@@ -319,166 +343,6 @@ export class XmRouter {
     }
   }
 
-  static async handleCreateListNode(req, data, dbName) {
-    try {
-      if (!data.name || typeof data.name !== "string") {
-        return XmRouter.gzipResponse(
-          { code: 400, msg: "Name is required and must be a string" },
-          400
-        );
-      }
-      const { pid, name, key } = data;
-      const listNode = await XmDb.createListItem(
-        pid,
-        name,
-        key,
-        [],
-        [],
-        dbName
-      );
-      return XmRouter.gzipResponse(
-        {
-          code: 0,
-          msg: "List item created successfully",
-          data: {
-            id: listNode.id,
-            pid: listNode.pid,
-            name: listNode.name,
-            key: listNode.key,
-          },
-        },
-        201
-      );
-    } catch (error) {
-      if (process.env.NODE_ENV !== "production") {
-        console.error(
-          `[XmRouter] handleCreateListNode error for ${dbName}:`,
-          error
-        );
-      }
-      const code =
-        error.message.includes("Unique constraint violation") ||
-        error.message.includes("Invalid")
-          ? 400
-          : 500;
-      return XmRouter.gzipResponse(
-        {
-          code,
-          msg: `Failed to create list item in ${dbName}: ${error.message}`,
-        },
-        code
-      );
-    }
-  }
-
-  static async handleUpdateListNode(req, data, dbName) {
-    try {
-      const id = data.id;
-      if (!id || !/^\d+$/.test(id)) {
-        return XmRouter.gzipResponse(
-          { code: 400, msg: "Invalid list item ID" },
-          400
-        );
-      }
-      const updates = {};
-      if (data.name) updates.name = data.name;
-      if (data.pid !== undefined) updates.pid = data.pid;
-      if (data.key !== undefined) updates.key = data.key;
-      const updated = await XmDb.updateListItem(id, updates, dbName);
-      if (!updated) {
-        return XmRouter.gzipResponse(
-          { code: 404, msg: `List item not found in ${dbName}` },
-          404
-        );
-      }
-      return XmRouter.gzipResponse(
-        {
-          code: 0,
-          msg: "List item updated successfully",
-          data: {
-            id: updated.id,
-            pid: updated.pid,
-            name: updated.name,
-            key: updated.key,
-          },
-        },
-        200
-      );
-    } catch (error) {
-      if (process.env.NODE_ENV !== "production") {
-        console.error(
-          `[XmRouter] handleUpdateListNode error for ${dbName}:`,
-          error
-        );
-      }
-      return XmRouter.gzipResponse(
-        {
-          code: 500,
-          msg: `Failed to update list item in ${dbName}: ${error.message}`,
-        },
-        500
-      );
-    }
-  }
-
-  static async handleDeleteListNode(req, data, dbName) {
-    try {
-      const id = data.id;
-      if (!id || !/^\d+$/.test(id)) {
-        return XmRouter.gzipResponse(
-          { code: 400, msg: "Invalid list item ID" },
-          400
-        );
-      }
-      const result = await XmDb.deleteListItem(id, true, dbName);
-      if (!result) {
-        return XmRouter.gzipResponse(
-          { code: 404, msg: `List item not found in ${dbName}` },
-          404
-        );
-      }
-      return XmRouter.gzipResponse(
-        { code: 0, msg: "List item deleted successfully" },
-        200
-      );
-    } catch (error) {
-      if (process.env.NODE_ENV !== "production") {
-        console.error(
-          `[XmRouter] handleDeleteListNode error for ${dbName}:`,
-          error
-        );
-      }
-      return XmRouter.gzipResponse(
-        {
-          code: 500,
-          msg: `Failed to delete list item in ${dbName}: ${error.message}`,
-        },
-        500
-      );
-    }
-  }
-
-  static async handleListKeys(req, dbName) {
-    try {
-      const keys = await XmDb.getListKeys(dbName);
-      return XmRouter.gzipResponse(
-        { code: 0, msg: "Success", data: keys },
-        200
-      );
-    } catch (error) {
-      if (process.env.NODE_ENV !== "production") {
-        console.error(`[XmRouter] handleListKeys error for ${dbName}:`, error);
-      }
-      return XmRouter.gzipResponse(
-        {
-          code: 500,
-          msg: `Failed to fetch list keys in ${dbName}: ${error.message}`,
-        },
-        500
-      );
-    }
-  }
-
   static async routerMatch(req, match) {
     try {
       const file = Bun.file(match.filePath);
@@ -496,7 +360,7 @@ export class XmRouter {
           500
         );
       }
-      return await handler.default(req, XmDb.dbs);
+      return await handler.default(req);
     } catch (error) {
       if (process.env.NODE_ENV !== "production") {
         console.error("[XmRouter] Router match error:", error);

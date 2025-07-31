@@ -66,7 +66,7 @@ export default {
       loading.value = true;
       errorMessage.value = '';
       try {
-        const data = await XmApiRequest('tree', null, table.value);
+        const data = await XmApiRequest('tree', null, 'tree');
         treeData.value = data.data || [];
         flatTreeNodes.value = [];
         const flattenNodes = (nodes) => {
@@ -126,7 +126,7 @@ export default {
           throw new Error(data.msg || 'Failed to save tree node');
         }
         showTreeModal.value = false;
-        await fetchAllData();
+        await loadData();
         message.success(data.msg || (isTreeEdit.value ? 'Node updated successfully' : 'Node created successfully'));
       } catch (err) {
         errorMessage.value = err.message;
@@ -141,7 +141,7 @@ export default {
         if (data.code !== 0) {
           throw new Error(data.msg || 'Failed to delete tree node');
         }
-        await fetchAllData();
+        await loadData();
         message.success(data.msg || 'Node deleted successfully');
       } catch (err) {
         errorMessage.value = err.message;
@@ -171,10 +171,10 @@ export default {
       showTreeModal.value = true;
     };
 
-    const handleTreeSelect = (keys) => {
+    const handleTreeSelect = async (keys) => {
       if (keys.length > 0) {
         selectedKeys.value = keys;
-        fetchListData()
+        loadData()
       } else {
 
       }
@@ -186,11 +186,13 @@ export default {
 
     const handleTabChange = async (value) => {
       table.value = value;
-      fetchListData()
+      await fetchListData()
     }
-
-    fetchAllData();
-    fetchListData()
+    const loadData = async () => {
+      await fetchAllData();
+      await fetchListData()
+    }
+    loadData();
 
     return {
       treeData,
@@ -266,7 +268,7 @@ export default {
         </n-form-item>
         <n-form-item label="Parent" v-if="isTreeEdit">
           <n-tree-select v-model:value="currentTreeNode.pid" :options="flatTreeNodes" placeholder="Select parent"
-            value-field="value" label-field="label" key-field="value" clearable />
+            value-field="id" label-field="name" key-field="id" clearable />
         </n-form-item>
         <n-form-item label="Parent" v-else>
           <n-input

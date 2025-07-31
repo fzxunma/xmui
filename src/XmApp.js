@@ -1,27 +1,25 @@
 // server.js
 import { XmRouter } from "./XmRouter.js"; // 导入路由模块
-import { XmDb } from "./XmDb.js";
-
+import XmDbCRUDInit from "./XmDbCRUIDInit.js";
 // Hook process events to close databases on exit
-process.on('SIGINT', () => {
-  XmDb.closeAll();
+process.on("SIGINT", () => {
+  XmDbCRUDInit.closeAll();
   process.exit(0);
 });
 
-process.on('SIGTERM', () => {
-  XmDb.closeAll();
+process.on("SIGTERM", () => {
+  XmDbCRUDInit.closeAll();
   process.exit(0);
 });
 
-process.on('beforeExit', () => {
-  XmDb.closeAll();
+process.on("beforeExit", () => {
+  XmDbCRUDInit.closeAll();
 });
 // MIME 类型映射
 export class XmApp {
   static server = null;
   static async init() {
-    // 初始化数据库
-    await XmDb.init();
+    await XmDbCRUDInit.init();
     console.log("XmApp initialized.");
   }
   static async run() {
