@@ -53,12 +53,6 @@ export class XmRouter {
       if (pathname === "/api/tree" && req.method === "POST") {
         return await XmRouter.handleTreeActions(req, dbName);
       }
-      if (pathname === "/api/list" && req.method === "POST") {
-        return await XmRouter.handleListActions(req, dbName);
-      }
-      if (pathname === "/api/list/keys" && req.method === "GET") {
-        return await XmRouter.handleListKeys(req, dbName);
-      }
       if (pathname.startsWith("/api")) {
         console.warn("Invalid API path:", pathname);
         return XmRouter.gzipResponse(
@@ -106,8 +100,10 @@ export class XmRouter {
       const { action, data, table } = payload;
 
       switch (action) {
-        case "get":
-          return await XmRouter.handleTree(req, dbName, table);
+        case "tree":
+          return await XmRouter.handleTree(req, data, dbName, table);
+        case "list":
+          return await XmRouter.handleList(req, data, dbName, table);
         case "add":
           return await XmRouter.handleCreateTreeNode(req, data, dbName, table);
         case "edit":
@@ -134,52 +130,7 @@ export class XmRouter {
     }
   }
 
-  static async handleListActions(req, dbName) {
-    try {
-      const base64Str = await req.text();
-      const jsonStr = Buffer.from(base64Str, "base64").toString("utf-8");
-      let payload;
-      try {
-        payload = JSON.parse(jsonStr);
-      } catch (e) {
-        return XmRouter.gzipResponse(
-          { code: 400, msg: "Invalid JSON after Base64 decode" },
-          400
-        );
-      }
-
-      const { action, table, data } = payload;
-      console.log("handleListActions", payload);
-      switch (action) {
-        case "get":
-          return await XmRouter.handleList(req, data, dbName, table);
-        case "add":
-          return await XmRouter.handleCreateListNode(req, data, dbName, table);
-        case "edit":
-          return await XmRouter.handleUpdateListNode(req, data, dbName, table);
-        case "delete":
-          return await XmRouter.handleDeleteListNode(req, data, dbName, table);
-        default:
-          return XmRouter.gzipResponse(
-            { code: 400, msg: `Invalid action: ${action}` },
-            400
-          );
-      }
-    } catch (error) {
-      if (process.env.NODE_ENV !== "production") {
-        console.error(
-          `[XmRouter] handleListActions error for ${dbName}:`,
-          error
-        );
-      }
-      return XmRouter.gzipResponse(
-        { code: 400, msg: `Invalid JSON payload: ${error.message}` },
-        400
-      );
-    }
-  }
-
-  static async handleTree(req, dbName) {
+  static async handleTree(req, data, dbName, table) {
     try {
       const trees = await XmDb.buildTree(0, dbName);
       if (!trees || !trees.length) {
@@ -206,7 +157,7 @@ export class XmRouter {
     }
   }
 
-  static async handleCreateTreeNode(req, data, dbName) {
+  static async handleCreateTreeNode(req, data, dbName, table) {
     try {
       if (!data.name || typeof data.name !== "string") {
         return XmRouter.gzipResponse(
@@ -215,7 +166,7 @@ export class XmRouter {
         );
       }
       const { pid, name, key } = data;
-      const treeNode = await XmDb.createTreeNode(pid, name, key, dbName);
+      const treeNode = await XmDb.createTreeNode(pid, name, key, dbName, table);
       return XmRouter.gzipResponse(
         {
           code: 0,
@@ -251,7 +202,7 @@ export class XmRouter {
     }
   }
 
-  static async handleUpdateTreeNode(req, data, dbName) {
+  static async handleUpdateTreeNode(req, data, dbName, table) {
     try {
       const id = data.id;
       if (!id || !/^\d+$/.test(id)) {
@@ -263,7 +214,7 @@ export class XmRouter {
       const updates = {};
       if (data.name) updates.name = data.name;
       if (data.pid !== undefined) updates.pid = data.pid;
-      const updated = await XmDb.updateTreeNode(id, updates, dbName);
+      const updated = await XmDb.updateTreeNode(id, updates, dbName, table);
       if (!updated) {
         return XmRouter.gzipResponse(
           { code: 404, msg: `Tree node not found in ${dbName}` },
@@ -349,7 +300,7 @@ export class XmRouter {
         dbName,
         table
       );
- 
+
       return XmRouter.gzipResponse(
         { code: 0, msg: "Success", data: listItems },
         200

@@ -23,48 +23,14 @@ export default {
     const table = ref('tree');
 
     const filteredTreeNodes = computed(() => {
-      const type = table.value
-      let datas = treeData
-      if (type === "tree") {
-        datas = treeData
-      } else {
-        datas = listData
-      }
-      if (!datas.value || !Array.isArray(datas.value)) {
+      if (!listData.value || !Array.isArray(listData.value)) {
         return [];
       }
-      if (selectedKeys.value.length === 0) {
-        return datas.value.map(node => ({
-          id: node.id,
-          pid: node.pid !== null ? node.pid : null,
-          name: node.name,
-          key: node.key,
-        }));
-      }
-
-      const findNode = (nodes, key) => {
-        for (const node of nodes) {
-          if (node.id === key) {
-            return node;
-          }
-          if (node.children && node.children.length) {
-            const found = findNode(node.children, key);
-            if (found) return found;
-          }
-        }
-        return null;
-      };
-
-      const selectedNode = findNode(datas.value, selectedKeys.value[0]);
-      if (!selectedNode || !selectedNode.children) {
-        return [];
-      }
-
-      return selectedNode.children.map(child => ({
-        id: child.id,
-        pid: child.pid !== null ? child.pid : null,
-        name: child.name,
-        key: child.key,
+      return listData.value.map(node => ({
+        id: node.id,
+        pid: node.pid !== null ? node.pid : null,
+        name: node.name,
+        key: node.key,
       }));
     });
 
@@ -100,7 +66,7 @@ export default {
       loading.value = true;
       errorMessage.value = '';
       try {
-        const data = await XmApiRequest('get', null, table.value);
+        const data = await XmApiRequest('tree', null, table.value);
         treeData.value = data.data || [];
         flatTreeNodes.value = [];
         const flattenNodes = (nodes) => {
@@ -136,8 +102,7 @@ export default {
         if (selectedKeys.value.length > 0) {
           pid = selectedKeys.value[0]
         }
-        console.log(selectedKeys.value)
-        const data = await XmApiRequest('get', { pid }, "list", table.value);
+        const data = await XmApiRequest('list', { pid }, table.value);
         listData.value = data.data?.rows || [];
       } catch (err) {
         errorMessage.value = err.message;
@@ -207,7 +172,12 @@ export default {
     };
 
     const handleTreeSelect = (keys) => {
-      selectedKeys.value = keys;
+      if (keys.length > 0) {
+        selectedKeys.value = keys;
+        fetchListData()
+      } else {
+
+      }
     };
 
     const handleTableSelect = (keys) => {
@@ -220,6 +190,7 @@ export default {
     }
 
     fetchAllData();
+    fetchListData()
 
     return {
       treeData,
@@ -269,13 +240,11 @@ export default {
       <div class="flex-1 overflow-y-auto p-2.5 border border-gray-200">
         <n-tabs type="line" animated v-model:value="table" @update:value="handleTabChange">
           <n-tab name="tree" tab="Tree">
-            tree
           </n-tab>
           <n-tab name="list" tab="List">
-            list
           </n-tab>
         </n-tabs>
-        <h2 class="text-xl font-semibold mb-2">Tree Nodes</h2>
+        <h2 class="text-xl font-semibold mb-2"> {{ table }} Nodes</h2>
         <n-button type="success" class="mb-4 bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded"
           @click="openTreeAdd">
           Add Node

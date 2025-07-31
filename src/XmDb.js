@@ -53,25 +53,9 @@ export class XmDb {
 
       XmDb.log(`Initializing data for ${dbName}...`);
       try {
-        const root1 = await XmDb.create(
-          "tree",
-          0,
-          "Root1",
-          "",
-          [],
-          [],
-          dbName
-        );
+        const root1 = await XmDb.create("tree", 0, "Root1", "", [], [], dbName);
         await XmDb.loadTable("tree", dbName);
-        const root2 = await XmDb.create(
-          "tree",
-          0,
-          "Root2",
-          "",
-          [],
-          [],
-          dbName
-        );
+        const root2 = await XmDb.create("tree", 0, "Root2", "", [], [], dbName);
         await XmDb.loadTable("tree", dbName);
         const rootId1 = root1.id;
         const rootId2 = root2.id;
@@ -374,7 +358,7 @@ export class XmDb {
           pidCacheUpdate.get(newPid).push(updatedData);
         }
         idCache.set(id, updatedData);
-      }
+      } 
       return updatedData;
     } catch (error) {
       XmDb.log(
@@ -428,17 +412,15 @@ export class XmDb {
     }
   }
 
-  static async createTreeNode(pid = 0, name = "", key = "", dbName = "xm1") {
+  static async createTreeNode(
+    pid = 0,
+    name = "",
+    key = "",
+    dbName = "xm1",
+    table = "tree"
+  ) {
     try {
-      const node = await XmDb.create(
-        "tree",
-        pid,
-        name,
-        key,
-        [],
-        [],
-        dbName
-      );
+      const node = await XmDb.create(table, pid, name, key, [], [], dbName);
       // await XmDb.create(
       //   "list",
       //   pid,
@@ -472,8 +454,8 @@ export class XmDb {
     }
   }
 
-  static async updateTreeNode(id, updates, dbName = "xm1") {
-    return await XmDb.update("tree", id, updates, dbName);
+  static async updateTreeNode(id, updates, dbName = "xm1", table) {
+    return await XmDb.update(table, id, updates, dbName);
   }
 
   static async deleteTreeNode(id, soft = true, dbName = "xm1") {
@@ -507,7 +489,70 @@ export class XmDb {
       return [];
     }
   }
+  static async buildTreeDeep(
+    root_id = 0,
+    dbName = "xm1",
+    maxDepth = Infinity,
+    page = 1,
+    limit = Infinity
+  ) {
+    try {
+      await XmDb.ensureTable("tree", dbName);
+      await XmDb.ensureTable("list", dbName);
+      const cacheKeyTree = `${dbName}:tree`;
+      const cacheKeyList = `${dbName}:list`;
 
+      let treeIdCache = XmDb.idCache.get(cacheKeyTree);
+      let pidCache = XmDb.pidCache.get(cacheKeyTree);
+      let listKeyCache = XmDb.keyCache.get(cacheKeyList);
+      if (!treeIdCache || Date.now() - treeIdCache.lastUpdated > 60000) {
+        await XmDb.loadTable("tree", dbName);
+        treeIdCache = XmDb.idCache.get(cacheKeyTree);
+        pidCache = XmDb.pidCache.get(cacheKeyTree);
+      }
+      if (!listKeyCache || Date.now() - listKeyCache.lastUpdated > 60000) {
+        await XmDb.loadTable("list", dbName);
+        listKeyCache = XmDb.keyCache.get(cacheKeyList);
+      }
+
+      const nodes = Array.from(treeIdCache.data.values());
+      const lists = Array.from(listKeyCache.data.values());
+      const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+      const listMap = new Map(lists.map((l) => [l.id, l]));
+
+      const build = (id, currentDepth = 1) => {
+        const node = nodeMap.get(id);
+        if (!node) {
+          XmDb.log(`Node ${id} not found in ${dbName}`, "warn");
+          return null;
+        }
+        if (currentDepth > maxDepth) {
+          return { ...node, list: listMap.get(id), children: [] };
+        }
+        let childrenRows = pidCache.data.get(id) || [];
+        childrenRows = childrenRows.slice((page - 1) * limit, page * limit);
+        const children = childrenRows
+          .map((n) => build(n.id, currentDepth + 1))
+          .filter(Boolean);
+        return { ...node, list: listMap.get(id), children };
+      };
+      if (root_id !== 0) {
+        const tree = build(root_id);
+        return tree ? [tree] : [];
+      } else {
+        let rootNodes = pidCache.data.get(0) || [];
+        rootNodes = rootNodes.slice((page - 1) * limit, page * limit);
+        if (!rootNodes.length) {
+          XmDb.log(`No root nodes found for ${dbName}`, "warn");
+          return [];
+        }
+        return rootNodes.map((root) => build(root.id)).filter(Boolean);
+      }
+    } catch (error) {
+      XmDb.log(`Build tree failed in ${dbName}: ${error.message}`, "error");
+      return [];
+    }
+  }
   static async buildTree(root_id = 0, dbName = "xm1") {
     try {
       await XmDb.ensureTable("tree", dbName);
@@ -594,8 +639,47 @@ export class XmDb {
   static async deleteListItem(id, soft = true, dbName = "xm1") {
     return await XmDb.delete("list", id, soft, dbName);
   }
-
   static async getListItems(
+    pid = 0,
+    page = 1,
+    limit = 10,
+    dbName = "xm1",
+    table = "tree"
+  ) {
+    try {
+      const cacheKey = `${dbName}:${table}`;
+      const cache = XmDb.pidCache.get(cacheKey);
+      if (cache && Date.now() - cache.lastUpdated <= 60000) {
+        const rows = cache.data.get(pid) || [];
+        const offset = (page - 1) * limit;
+        const paginatedRows = rows.slice(offset, offset + limit);
+        return { rows: paginatedRows, total: rows.length };
+      }
+
+      // Fallback to database if cache is stale or missing
+      const db = XmDb.dbs.get(dbName);
+      if (!db) throw new Error(`Database ${dbName} not found`);
+      const offset = (page - 1) * limit;
+      const rows = db
+        .prepare(
+          `SELECT * FROM \`list\` WHERE pid = ? AND delete_time IS NULL LIMIT ? OFFSET ?`
+        )
+        .all(pid, limit, offset);
+      const count = db
+        .prepare(
+          `SELECT COUNT(*) as count FROM \`list\` WHERE pid = ? AND delete_time IS NULL`
+        )
+        .get(pid).count;
+      return { rows, total: count };
+    } catch (error) {
+      XmDb.log(
+        `Get list items for pid ${pid} failed in ${dbName}: ${error.message}`,
+        "error"
+      );
+      throw error;
+    }
+  }
+  static async getListItemsDb(
     pid = 0,
     page = 1,
     limit = 10,
