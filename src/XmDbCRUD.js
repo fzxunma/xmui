@@ -6,15 +6,17 @@ export class XmDbCRUD {
   static getClientIP(req) {
     try {
       if (req) {
-        return req.headers.get('x-forwarded-for') || 
-               req.headers.get('x-real-ip') || 
-               req.socket?.remoteAddress || 
-               'unknown';
+        return (
+          req.headers.get("x-forwarded-for") ||
+          req.headers.get("x-real-ip") ||
+          req.socket?.remoteAddress ||
+          "unknown"
+        );
       }
     } catch (error) {
       // 忽略错误
     }
-    return 'unknown';
+    return "unknown";
   }
 
   static async create({
@@ -35,6 +37,7 @@ export class XmDbCRUD {
       if (uniqueFields.length !== uniqueValues.length) {
         throw new Error("Mismatch between uniqueFields and uniqueValues");
       }
+      pid = pid || 0;
       const cacheKey = `${dbName}:${type}`;
       if (
         type === "tree" &&
@@ -78,7 +81,7 @@ export class XmDbCRUD {
         INSERT INTO \`${type}\` (pid, name, key, version, data, create_time, update_time)
         VALUES (?, ?, ?, 1, ?, strftime('%s', 'now'), strftime('%s', 'now')) RETURNING *`);
       const row = stmt.get(pid, name, key, dataJson);
-      
+
       // 记录创建日志到日志表
       await this.logOperation({
         dbName: "xmlog",
@@ -95,11 +98,11 @@ export class XmDbCRUD {
           key: row.key,
           ip: this.getClientIP(req),
           userId: userId,
-          data: data
+          data: data,
         },
-        req: req
+        req: req,
       });
-      
+
       XmDb.idCache.set(`${cacheKey}:${row.id}`, row);
       XmDb.keyCache.set(`${cacheKey}:${row.name}_${row.pid}`, row);
       const pidRows = XmDb.pidCache.get(`${cacheKey}:${row.pid}`) || [];
@@ -120,11 +123,11 @@ export class XmDbCRUD {
           pid: pid,
           name: name,
           ip: this.getClientIP(req),
-          userId: userId
+          userId: userId,
         },
-        req: req
+        req: req,
       });
-      
+
       XmDb.log(`Create ${type} failed in ${dbName}: ${error.message}`, "error");
       throw error;
     }
@@ -135,7 +138,7 @@ export class XmDbCRUD {
       await XmDb.ensureTable(type, dbName);
       const cacheKey = `${dbName}:${type}`;
       const result = XmDb.idCache.get(`${cacheKey}:${id}`) ?? null;
-      
+
       // 记录读取日志
       let message, logLevel;
       if (result) {
@@ -145,7 +148,7 @@ export class XmDbCRUD {
         message = `Read ${type} record with id ${id} not found in ${dbName}`;
         logLevel = "warn";
       }
-      
+
       await this.logOperation({
         dbName: "xmlog",
         tableType: "log",
@@ -158,11 +161,11 @@ export class XmDbCRUD {
         details: {
           ip: this.getClientIP(req),
           userId: userId,
-          found: result !== null
+          found: result !== null,
         },
-        req: req
+        req: req,
       });
-      
+
       XmDb.log(message, logLevel);
       return result;
     } catch (error) {
@@ -177,22 +180,31 @@ export class XmDbCRUD {
         message: `Read ${type} id ${id} failed in ${dbName}: ${error.message}`,
         details: {
           ip: this.getClientIP(req),
-          userId: userId
+          userId: userId,
         },
-        req: req
+        req: req,
       });
-      
-      XmDb.log(`Read ${type} id ${id} failed in ${dbName}: ${error.message}`, "error");
+
+      XmDb.log(
+        `Read ${type} id ${id} failed in ${dbName}: ${error.message}`,
+        "error"
+      );
       throw error;
     }
   }
 
-  static async readByName({ type, compositeKey, dbName = "xm1", req = null, userId = null }) {
+  static async readByName({
+    type,
+    compositeKey,
+    dbName = "xm1",
+    req = null,
+    userId = null,
+  }) {
     try {
       await XmDb.ensureTable(type, dbName);
       const cacheKey = `${dbName}:${type}`;
       const result = XmDb.keyCache.get(`${cacheKey}:${compositeKey}`) ?? null;
-      
+
       // 记录读取日志
       let message, logLevel;
       if (result) {
@@ -202,7 +214,7 @@ export class XmDbCRUD {
         message = `Read ${type} record with key ${compositeKey} not found in ${dbName}`;
         logLevel = "warn";
       }
-      
+
       await this.logOperation({
         dbName: "xmlog",
         tableType: "log",
@@ -216,11 +228,11 @@ export class XmDbCRUD {
           compositeKey: compositeKey,
           ip: this.getClientIP(req),
           userId: userId,
-          found: result !== null
+          found: result !== null,
         },
-        req: req
+        req: req,
       });
-      
+
       XmDb.log(message, logLevel);
       return result;
     } catch (error) {
@@ -235,12 +247,15 @@ export class XmDbCRUD {
         details: {
           compositeKey: compositeKey,
           ip: this.getClientIP(req),
-          userId: userId
+          userId: userId,
         },
-        req: req
+        req: req,
       });
-      
-      XmDb.log(`Read ${type} by name+pid ${compositeKey} failed in ${dbName}: ${error.message}`, "error");
+
+      XmDb.log(
+        `Read ${type} by name+pid ${compositeKey} failed in ${dbName}: ${error.message}`,
+        "error"
+      );
       throw error;
     }
   }
@@ -268,7 +283,7 @@ export class XmDbCRUD {
       if (expectedVersion !== null && existing.version !== expectedVersion) {
         const errorMsg = `Version conflict: expected ${expectedVersion}, but found ${existing.version} for ${type} id ${id} in ${dbName}`;
         XmDb.log(errorMsg, "warn");
-        
+
         await this.logOperation({
           dbName: "xmlog",
           tableType: "log",
@@ -282,11 +297,11 @@ export class XmDbCRUD {
             expectedVersion: expectedVersion,
             actualVersion: existing.version,
             ip: this.getClientIP(req),
-            userId: userId
+            userId: userId,
           },
-          req: req
+          req: req,
         });
-        
+
         throw new Error(errorMsg);
       }
 
@@ -350,7 +365,7 @@ export class XmDbCRUD {
       if (result.changes === 0) {
         const errorMsg = `Version conflict or record not found during update for ${type} id ${id} in ${dbName}`;
         XmDb.log(errorMsg, "warn");
-        
+
         await this.logOperation({
           dbName: "xmlog",
           tableType: "log",
@@ -362,18 +377,18 @@ export class XmDbCRUD {
           message: errorMsg,
           details: {
             ip: this.getClientIP(req),
-            userId: userId
+            userId: userId,
           },
-          req: req
+          req: req,
         });
-        
+
         throw new Error(errorMsg);
       }
 
       // 记录更新日志
       const logMessage = `Updated ${type} record with id ${id} in ${dbName} (version ${newVersion})`;
       XmDb.log(logMessage, "info");
-      
+
       await this.logOperation({
         dbName: "xmlog",
         tableType: "log",
@@ -388,9 +403,9 @@ export class XmDbCRUD {
           oldVersion: existing.version,
           newVersion: newVersion,
           ip: this.getClientIP(req),
-          userId: userId
+          userId: userId,
         },
-        req: req
+        req: req,
       });
 
       if (compositeKey !== oldCompositeKey) {
@@ -437,12 +452,15 @@ export class XmDbCRUD {
         details: {
           updates: updates,
           ip: this.getClientIP(req),
-          userId: userId
+          userId: userId,
         },
-        req: req
+        req: req,
       });
-      
-      XmDb.log(`Update ${type} id ${id} failed in ${dbName}: ${error.message}`, "error");
+
+      XmDb.log(
+        `Update ${type} id ${id} failed in ${dbName}: ${error.message}`,
+        "error"
+      );
       throw error;
     }
   }
@@ -470,7 +488,7 @@ export class XmDbCRUD {
       if (expectedVersion !== null && existing.version !== expectedVersion) {
         const errorMsg = `Version conflict: expected ${expectedVersion}, but found ${existing.version} for ${type} id ${id} in ${dbName}`;
         XmDb.log(errorMsg, "warn");
-        
+
         await this.logOperation({
           dbName: "xmlog",
           tableType: "log",
@@ -484,11 +502,11 @@ export class XmDbCRUD {
             expectedVersion: expectedVersion,
             actualVersion: existing.version,
             ip: this.getClientIP(req),
-            userId: userId
+            userId: userId,
           },
-          req: req
+          req: req,
         });
-        
+
         throw new Error(errorMsg);
       }
 
@@ -502,7 +520,7 @@ export class XmDbCRUD {
       if (result.changes === 0) {
         const errorMsg = `Version conflict or record not found during delete for ${type} id ${id} in ${dbName}`;
         XmDb.log(errorMsg, "warn");
-        
+
         await this.logOperation({
           dbName: "xmlog",
           tableType: "log",
@@ -514,11 +532,11 @@ export class XmDbCRUD {
           message: errorMsg,
           details: {
             ip: this.getClientIP(req),
-            userId: userId
+            userId: userId,
           },
-          req: req
+          req: req,
         });
-        
+
         throw new Error(errorMsg);
       }
 
@@ -526,7 +544,7 @@ export class XmDbCRUD {
       const deleteType = soft ? "soft-deleted" : "hard-deleted";
       const logMessage = `${deleteType} ${type} record with id ${id} in ${dbName}`;
       XmDb.log(logMessage, "info");
-      
+
       await this.logOperation({
         dbName: "xmlog",
         tableType: "log",
@@ -540,9 +558,9 @@ export class XmDbCRUD {
           deleteType: deleteType,
           soft: soft,
           ip: this.getClientIP(req),
-          userId: userId
+          userId: userId,
         },
-        req: req
+        req: req,
       });
 
       const compositeKey = `${existing.name}_${existing.pid}`;
@@ -567,12 +585,15 @@ export class XmDbCRUD {
         details: {
           soft: soft,
           ip: this.getClientIP(req),
-          userId: userId
+          userId: userId,
         },
-        req: req
+        req: req,
       });
-      
-      XmDb.log(`Delete ${type} id ${id} failed in ${dbName}: ${error.message}`, "error");
+
+      XmDb.log(
+        `Delete ${type} id ${id} failed in ${dbName}: ${error.message}`,
+        "error"
+      );
       throw error;
     }
   }
@@ -588,12 +609,12 @@ export class XmDbCRUD {
     success = true,
     message = "",
     details = {},
-    req = null
+    req = null,
   }) {
     try {
       // 确保日志表存在
       await XmDb.ensureTable(tableType, dbName);
-      
+
       const db = XmDb.dbs.get(dbName);
       if (!db) {
         console.error(`Log database ${dbName} not found`);
@@ -601,35 +622,41 @@ export class XmDbCRUD {
       }
 
       // 构建日志记录的 name 字段 (database_name + table_type)
-      const logName = databaseName ? `${databaseName}_${tableName || 'unknown'}` : 'system_log';
-      
+      const logName = databaseName
+        ? `${databaseName}_${tableName || "unknown"}`
+        : "system_log";
+
       // 构建日志记录的 pid 字段 (record_id)
       const logPid = recordId || 0;
-      
+
       // 构建详细的日志数据
       const logData = {
         operation: operation,
         success: success,
         timestamp: Math.floor(Date.now() / 1000),
-        ip: details.ip || this.getClientIP(req) || 'unknown',
+        ip: details.ip || this.getClientIP(req) || "unknown",
         userId: details.userId || null,
         details: details,
-        userAgent: req?.headers?.get('user-agent') || null,
+        userAgent: req?.headers?.get("user-agent") || null,
         url: req?.url || null,
-        method: req?.method || null
+        method: req?.method || null,
       };
 
       const stmt = db.prepare(`
         INSERT INTO \`${tableType}\` (pid, name, key, version, data, create_time, update_time)
         VALUES (?, ?, ?, 1, ?, strftime('%s', 'now'), strftime('%s', 'now')) RETURNING *`);
-      
+
       const logMessage = {
         message: message,
-        ...logData
+        ...logData,
       };
-      
-      stmt.get(logPid, logName, `log_${Date.now()}`, JSON.stringify(logMessage));
-      
+
+      stmt.get(
+        logPid,
+        logName,
+        `log_${Date.now()}`,
+        JSON.stringify(logMessage)
+      );
     } catch (error) {
       console.error("Failed to write log to database:", error.message);
     }
@@ -645,7 +672,7 @@ export class XmDbCRUD {
       return data; // 返回原始字符串
     }
   }
-  
+
   // 查询日志的方法
   static async getLogs({
     dbName = "xmlog",
@@ -655,7 +682,7 @@ export class XmDbCRUD {
     operation = null,
     success = null,
     limit = 100,
-    offset = 0
+    offset = 0,
   } = {}) {
     try {
       await XmDb.ensureTable(tableType, dbName);
