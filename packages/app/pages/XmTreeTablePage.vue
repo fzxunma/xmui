@@ -2,9 +2,14 @@
 import { ref, computed, h } from 'vue';
 import naive from 'naive-ui'; // 从自定义 naive.js 导入
 const { NButton, NPopconfirm, NModal, NForm, NFormItem, NInput, NTreeSelect, NTree, NDataTable, NSpin, useMessage } = naive;
-
+import XmTableEdit from "../components/XmTableEditCheck.vue";
+import XmApiRequest from "../units/XmApiRequest.js"
 export default {
+  components: {
+    XmTableEdit
+  },
   setup() {
+
     const message = useMessage(); // 初始化消息通知
     const treeData = ref([]);
     const flatTreeNodes = ref([]);
@@ -74,23 +79,12 @@ export default {
       {
         title: 'Actions',
         key: 'actions',
-        render: (row) => h('span', [
-          h(NButton, {
-            size: 'small',
-            type: 'primary',
-            onClick: () => openTreeEdit(row),
-            class: 'mr-2' // Tailwind: margin-right: 8px
-          }, { default: () => 'Edit' }),
-          h(NPopconfirm, {
-            onPositiveClick: () => handleTreeDelete(row)
-          }, {
-            trigger: () => h(NButton, {
-              size: 'small',
-              type: 'error'
-            }, { default: () => 'Delete' }),
-            default: () => 'Delete this node and children?'
+        render: (row) =>
+          h(XmTableEdit, {
+            row,
+            onOpenTreeEdit: (row) => openTreeEdit(row),
+            onHandleTreeDelete: (row) => handleTreeDelete(row)
           })
-        ])
       }
     ];
 
@@ -98,11 +92,8 @@ export default {
       loading.value = true;
       errorMessage.value = '';
       try {
-        const response = await fetch('http://localhost:3000/api/tree');
-        const data = await response.json();
-        if (!response.ok || data.code !== 0) {
-          throw new Error(data.msg || 'Failed to fetch tree');
-        }
+        const data = await XmApiRequest('get');
+        console.log(data)
         treeData.value = data.data ? [data.data] : [];
         // 为 NTreeSelect 生成平面节点列表
         flatTreeNodes.value = [];
@@ -116,19 +107,23 @@ export default {
               name: node.name,
               key: node.key
             });
-            if (node.children) {
+            if (node.children && node.children.length > 0) {
               flattenNodes(node.children);
             }
           });
         };
         flattenNodes(treeData.value);
+        if (selectedKeys.value[0] > 0) {
+
+        } else {
+          selectedKeys.value[0] = data.data.id
+        }
       } catch (err) {
         errorMessage.value = err.message;
         message.error(err.message);
         treeData.value = [];
         flatTreeNodes.value = [];
       } finally {
-        selectedKeys.value = [];
         loading.value = false;
       }
     };
@@ -141,23 +136,12 @@ export default {
         pid: currentTreeNode.value.pid !== null ? currentTreeNode.value.pid : null
       };
       try {
-        const response = isTreeEdit.value
-          ? await fetch(`http://localhost:3000/api/tree/${currentTreeNode.value.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(input)
-          })
-          : await fetch('http://localhost:3000/api/tree', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(input)
-          });
-        const data = await response.json();
-        if (!response.ok || data.code !== 0) {
+        const action = isTreeEdit.value ? 'edit' : 'add';
+        const data = await XmApiRequest(action, input);
+        if (data.code !== 0) {
           throw new Error(data.msg || 'Failed to save tree node');
         }
         showTreeModal.value = false;
-        selectedKeys.value = [];
         await fetchAllData();
         message.success(data.msg || (isTreeEdit.value ? 'Node updated successfully' : 'Node created successfully'));
       } catch (err) {
@@ -169,14 +153,7 @@ export default {
     const handleTreeDelete = async (node) => {
       errorMessage.value = '';
       try {
-        const response = await fetch(`http://localhost:3000/api/tree/${node.id || node.value}`, {
-          method: 'DELETE'
-        });
-        const data = await response.json();
-        if (!response.ok || data.code !== 0) {
-          throw new Error(data.msg || 'Failed to delete tree node');
-        }
-        selectedKeys.value = [];
+        const data = await XmApiRequest('delete', { id });
         await fetchAllData();
         message.success(data.msg || 'Node deleted successfully');
       } catch (err) {
@@ -208,7 +185,11 @@ export default {
     };
 
     const handleTreeSelect = (keys) => {
-      selectedKeys.value = keys
+      if (keys.length === 0) {
+
+      } else {
+        selectedKeys.value = keys
+      }
     };
 
     const handleTableSelect = (keys) => {
@@ -248,12 +229,12 @@ export default {
     <div v-else-if="errorMessage" class="text-red-500 mb-4 text-center">
       {{ errorMessage }}
     </div>
-    <div v-else class="flex gap-1 ">
+    <div class="flex gap-1 ">
       <!-- Tree View (Left) -->
-      <div class="w-64  overflow-y-auto p-2.5 border border-gray-200">
+      <div class="w-64 h-full overflow-y-auto p-2.5 border border-gray-200">
         <h2 class="text-xl font-semibold mb-2">Tree View</h2>
         <n-tree :data="treeData" key-field="id" label-field="name" show-line expandable block-line default-expand-all
-          :selected-keys="selectedKeys" selectable @update:selected-keys="handleTreeSelect" />
+          virtual-scroll selectable :selected-keys="selectedKeys" @update:selected-keys="handleTreeSelect" />
         <p v-if="treeData && !treeData.length" class="text-gray-500 mt-2">No tree nodes available. Add a node to start.
         </p>
       </div>
@@ -284,8 +265,8 @@ export default {
           <n-input v-model:value="currentTreeNode.key" placeholder="Enter key" />
         </n-form-item>
         <n-form-item label="Parent" v-if="isTreeEdit">
-          <n-tree-select v-model:value="currentTreeNode.pid" :options="flatTreeNodes" placeholder="Select parent"
-            clearable />
+          <n-tree-select v-model:value="currentTreeNode.pid" :options="treeData" placeholder="Select parent"
+            value-field="id" label-field="name" key-field="id" clearable />
         </n-form-item>
         <n-form-item label="Parent" v-else>
           <n-input

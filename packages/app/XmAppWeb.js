@@ -6,6 +6,12 @@ import naive from "naive-ui";
 class XmAppWeb {
   static async loadApp() {
     const App = createApp(XmRounterPage);
+    for (const compName in naive) {
+      const component = naive[compName];
+      if (component && component.name) {
+        App.component(component.name, component);
+      }
+    }
     App.use(naive);
     App.use(router);
     App.mount("#app");

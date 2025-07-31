@@ -11,124 +11,161 @@ export class XmRouter {
     fileExtensions: [".ts", ".js"],
   });
 
+  static gzipResponse(obj, status = 200, headers = {}) {
+    const jsonStr = JSON.stringify(obj);
+    const encoded = new TextEncoder().encode(jsonStr);
+    const gzipped = Bun.gzipSync(encoded);
+    return new Response(gzipped, {
+      status,
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Encoding": "gzip",
+        "Content-Length": gzipped.byteLength.toString(),
+        Vary: "Accept-Encoding",
+        ...headers,
+      },
+    });
+  }
+
   static async setup(req) {
     try {
       const url = new URL(req.url);
       const pathname = url.pathname;
+      const dbName = url.searchParams.get("db") || "xm1";
+      const acceptEncoding = req.headers.get("Accept-Encoding") || "";
 
-      // RESTful API 端点
-      if (pathname === "/api/tree" && req.method === "GET") {
-        return await XmRouter.handleTree(req);
+      const validDbs = ["xm1", "xm2"];
+      if (!validDbs.includes(dbName)) {
+        return XmRouter.gzipResponse(
+          { code: 400, msg: `Invalid database name: ${dbName}` },
+          400
+        );
       }
-      if (pathname === "/api/tree/nodes" && req.method === "GET") {
-        return await XmRouter.handleTreeNodes(req);
-      }
+
       if (pathname === "/api/tree" && req.method === "POST") {
-        return await XmRouter.handleCreateTreeNode(req);
-      }
-      if (pathname.startsWith("/api/tree/") && req.method === "PUT") {
-        return await XmRouter.handleUpdateTreeNode(req);
-      }
-      if (pathname.startsWith("/api/tree/") && req.method === "DELETE") {
-        return await XmRouter.handleDeleteTreeNode(req);
+        return await XmRouter.handleTreeActions(req, dbName, acceptEncoding);
       }
 
-      // 文件系统路由
       const match = XmRouter.router.match(pathname);
       if (match) {
-        return await XmRouter.routerMatch(req, match);
+        return await XmRouter.routerMatch(req, match, acceptEncoding);
       }
 
-      // 静态文件服务
       return await XmStaticFs.serve(pathname);
     } catch (error) {
       if (process.env.NODE_ENV !== "production") {
         console.error("[XmRouter] Setup error:", error);
       }
-      return new Response(
-        JSON.stringify({ code: 500, msg: `Internal server error: ${error.message}` }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
+      return XmRouter.gzipResponse(
+        { code: 500, msg: `Internal server error: ${error.message}` },
+        500
       );
     }
   }
 
-  static async handleTree(req) {
+  static async handleTreeActions(req, dbName, acceptEncoding) {
     try {
-      const tree = await XmDb.buildTree();
-      if (!tree) {
-        return new Response(
-          JSON.stringify({ code: 404, msg: "No root node found" }),
-          { status: 404, headers: { "Content-Type": "application/json" } }
+      const base64Str = await req.text();
+
+      // 解 Base64
+      const jsonStr = Buffer.from(base64Str, "base64").toString("utf-8");
+
+      // 解析 JSON
+      let payload;
+      try {
+        payload = JSON.parse(jsonStr);
+      } catch (e) {
+        return XmRouter.gzipResponse(
+          { code: 400, msg: "Invalid JSON after Base64 decode" },
+          400
         );
       }
-      return new Response(
-        JSON.stringify({ code: 0, msg: "Success", data: tree }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+
+      const { action, data } = payload;
+
+      switch (action) {
+        case "get":
+          return await XmRouter.handleTree(req, dbName, acceptEncoding);
+        case "add":
+          return await XmRouter.handleCreateTreeNode(
+            req,
+            data,
+            dbName,
+            acceptEncoding
+          );
+        case "edit":
+          return await XmRouter.handleUpdateTreeNode(
+            req,
+            data,
+            dbName,
+            acceptEncoding
+          );
+        case "delete":
+          return await XmRouter.handleDeleteTreeNode(
+            req,
+            data,
+            dbName,
+            acceptEncoding
+          );
+        default:
+          return XmRouter.gzipResponse(
+            { code: 400, msg: `Invalid action: ${action}` },
+            400
+          );
+      }
+    } catch (error) {
+      if (process.env.NODE_ENV !== "production") {
+        console.error(
+          `[XmRouter] handleTreeActions error for ${dbName}:`,
+          error
+        );
+      }
+      return XmRouter.gzipResponse(
+        { code: 400, msg: `Invalid JSON payload: ${error.message}` },
+        400
+      );
+    }
+  }
+
+  static async handleTree(req, dbName, acceptEncoding) {
+    try {
+      const trees = await XmDb.buildTree(0, dbName);
+      if (!trees || !trees.length) {
+        return XmRouter.gzipResponse(
+          { code: 404, msg: `No root nodes found in ${dbName}` },
+          404
+        );
+      }
+      return XmRouter.gzipResponse(
+        { code: 0, msg: "Success", data: trees },
+        200
       );
     } catch (error) {
       if (process.env.NODE_ENV !== "production") {
-        console.error("[XmRouter] handleTree error:", error);
+        console.error(`[XmRouter] handleTree error for ${dbName}:`, error);
       }
-      return new Response(
-        JSON.stringify({ code: 500, msg: `Failed to fetch tree: ${error.message}` }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
+      return XmRouter.gzipResponse(
+        {
+          code: 500,
+          msg: `Failed to fetch trees in ${dbName}: ${error.message}`,
+        },
+        500
       );
     }
   }
 
-  static async handleTreeNodes(req) {
+  static async handleCreateTreeNode(req, data, dbName, acceptEncoding) {
     try {
-      const nodes = await XmDb.buildTree();
-      if (!nodes) {
-        return new Response(
-          JSON.stringify({ code: 404, msg: "No root node found" }),
-          { status: 404, headers: { "Content-Type": "application/json" } }
+      if (!data.name || typeof data.name !== "string") {
+        return XmRouter.gzipResponse(
+          { code: 400, msg: "Name is required and must be a string" },
+          400
         );
       }
-      // 展平树形结构为节点列表
-      const flattenNodes = (nodes, result = []) => {
-        nodes.forEach(node => {
-          result.push({
-            id: node.id,
-            pid: node.pid,
-            name: node.name,
-            key: node.key,
-          });
-          if (node.children) {
-            flattenNodes(node.children, result);
-          }
-        });
-        return result;
-      };
-      const flatNodes = flattenNodes([nodes]);
-      return new Response(
-        JSON.stringify({ code: 0, msg: "Success", data: flatNodes }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
-      );
-    } catch (error) {
-      if (process.env.NODE_ENV !== "production") {
-        console.error("[XmRouter] handleTreeNodes error:", error);
-      }
-      return new Response(
-        JSON.stringify({ code: 500, msg: `Failed to fetch tree nodes: ${error.message}` }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
-    }
-  }
-
-  static async handleCreateTreeNode(req) {
-    try {
-      const input = await req.json();
-      if (!input.name || typeof input.name !== "string") {
-        return new Response(
-          JSON.stringify({ code: 400, msg: "Name is required and must be a string" }),
-          { status: 400, headers: { "Content-Type": "application/json" } }
-        );
-      }
-      const { pid, name, key } = input;
-      const treeNode = await XmDb.createTreeNode(pid, name, key);
-      return new Response(
-        JSON.stringify({
+      const { pid, name, key } = data;
+      const treeNode = await XmDb.createTreeNode(pid, name, key, dbName);
+      return XmRouter.gzipResponse(
+        {
           code: 0,
           msg: "Node created successfully",
           data: {
@@ -136,46 +173,54 @@ export class XmRouter {
             pid: treeNode.pid,
             name: treeNode.name,
             key: treeNode.key,
-          }
-        }),
-        { status: 201, headers: { "Content-Type": "application/json" } }
+          },
+        },
+        201
       );
     } catch (error) {
-      // if (process.env.NODE_ENV !== "production") {
-      //   console.error("[XmRouter] handleCreateTreeNode error:", error);
-      // }
-      const code = error.message.includes("Unique constraint violation") || error.message.includes("Invalid") ? 400 : 500;
-      return new Response(
-        JSON.stringify({ code, msg: `Failed to create tree node: ${error.message}` }),
-        { status: code, headers: { "Content-Type": "application/json" } }
+      if (process.env.NODE_ENV !== "production") {
+        console.error(
+          `[XmRouter] handleCreateTreeNode error for ${dbName}:`,
+          error
+        );
+      }
+      const code =
+        error.message.includes("Unique constraint violation") ||
+        error.message.includes("Invalid")
+          ? 400
+          : 500;
+      return XmRouter.gzipResponse(
+        {
+          code,
+          msg: `Failed to create tree node in ${dbName}: ${error.message}`,
+        },
+        code
       );
     }
   }
 
-  static async handleUpdateTreeNode(req) {
+  static async handleUpdateTreeNode(req, data, dbName, acceptEncoding) {
     try {
-      const url = new URL(req.url);
-      const id = url.pathname.split("/").pop();
+      const id = data.id;
       if (!id || !/^\d+$/.test(id)) {
-        return new Response(
-          JSON.stringify({ code: 400, msg: "Invalid tree node ID" }),
-          { status: 400, headers: { "Content-Type": "application/json" } }
+        return XmRouter.gzipResponse(
+          { code: 400, msg: "Invalid tree node ID" },
+          400
         );
       }
-      const input = await req.json();
       const updates = {};
-      if (input.name) updates.name = input.name;
-      if (input.key !== undefined) updates.key = input.key;
-      if (input.pid !== undefined) updates.pid = input.pid;
-      const updated = await XmDb.updateTreeNode(id, updates);
+      if (data.name) updates.name = data.name;
+      if (data.key !== undefined) updates.key = data.key;
+      if (data.pid !== undefined) updates.pid = data.pid;
+      const updated = await XmDb.updateTreeNode(id, updates, dbName);
       if (!updated) {
-        return new Response(
-          JSON.stringify({ code: 404, msg: "Tree node not found" }),
-          { status: 404, headers: { "Content-Type": "application/json" } }
+        return XmRouter.gzipResponse(
+          { code: 404, msg: `Tree node not found in ${dbName}` },
+          404
         );
       }
-      return new Response(
-        JSON.stringify({
+      return XmRouter.gzipResponse(
+        {
           code: 0,
           msg: "Node updated successfully",
           data: {
@@ -183,78 +228,89 @@ export class XmRouter {
             pid: updated.pid,
             name: updated.name,
             key: updated.key,
-          }
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+          },
+        },
+        200
       );
     } catch (error) {
       if (process.env.NODE_ENV !== "production") {
-        console.error("[XmRouter] handleUpdateTreeNode error:", error);
+        console.error(
+          `[XmRouter] handleUpdateTreeNode error for ${dbName}:`,
+          error
+        );
       }
-      return new Response(
-        JSON.stringify({ code: 500, msg: `Failed to update tree node: ${error.message}` }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
+      return XmRouter.gzipResponse(
+        {
+          code: 500,
+          msg: `Failed to update tree node in ${dbName}: ${error.message}`,
+        },
+        500
       );
     }
   }
 
-  static async handleDeleteTreeNode(req) {
+  static async handleDeleteTreeNode(req, data, dbName, acceptEncoding) {
     try {
-      const url = new URL(req.url);
-      const id = url.pathname.split("/").pop();
+      const id = data.id;
       if (!id || !/^\d+$/.test(id)) {
-        return new Response(
-          JSON.stringify({ code: 400, msg: "Invalid tree node ID" }),
-          { status: 400, headers: { "Content-Type": "application/json" } }
+        return XmRouter.gzipResponse(
+          { code: 400, msg: "Invalid tree node ID" },
+          400
         );
       }
-      const result = await XmDb.deleteTreeNode(id);
+      const result = await XmDb.deleteTreeNode(id, true, dbName);
       if (!result) {
-        return new Response(
-          JSON.stringify({ code: 404, msg: "Tree node not found" }),
-          { status: 404, headers: { "Content-Type": "application/json" } }
+        return XmRouter.gzipResponse(
+          { code: 404, msg: `Tree node not found in ${dbName}` },
+          404
         );
       }
-      return new Response(
-        JSON.stringify({ code: 0, msg: "Node deleted successfully" }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+      return XmRouter.gzipResponse(
+        { code: 0, msg: "Node deleted successfully" },
+        200
       );
     } catch (error) {
       if (process.env.NODE_ENV !== "production") {
-        console.error("[XmRouter] handleDeleteTreeNode error:", error);
+        console.error(
+          `[XmRouter] handleDeleteTreeNode error for ${dbName}:`,
+          error
+        );
       }
-      return new Response(
-        JSON.stringify({ code: 500, msg: `Failed to delete tree node: ${error.message}` }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
+      return XmRouter.gzipResponse(
+        {
+          code: 500,
+          msg: `Failed to delete tree node in ${dbName}: ${error.message}`,
+        },
+        500
       );
     }
   }
 
-  static async routerMatch(req, match) {
+  static async routerMatch(req, match, acceptEncoding) {
     try {
       const file = Bun.file(match.filePath);
       if (!(await file.exists())) {
-        return new Response(
-          JSON.stringify({ code: 404, msg: "Route file not found" }),
-          { status: 404, headers: { "Content-Type": "application/json" } }
+        return XmRouter.gzipResponse(
+          { code: 404, msg: "Route file not found" },
+          404
         );
       }
       delete require.cache[match.filePath];
       const handler = await import(`file://${match.filePath}`);
       if (typeof handler.default !== "function") {
-        return new Response(
-          JSON.stringify({ code: 500, msg: "Invalid route handler" }),
-          { status: 500, headers: { "Content-Type": "application/json" } }
+        return XmRouter.gzipResponse(
+          { code: 500, msg: "Invalid route handler" },
+          500
         );
       }
-      return await handler.default(req, XmDb.db);
+      return await handler.default(req, XmDb.dbs);
     } catch (error) {
       if (process.env.NODE_ENV !== "production") {
         console.error("[XmRouter] Router match error:", error);
       }
-      return new Response(
-        JSON.stringify({ code: 500, msg: `Internal server error: ${error.message}` }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
+      return XmRouter.gzipResponse(
+        { code: 500, msg: `Internal server error: ${error.message}` },
+        500
       );
     }
   }

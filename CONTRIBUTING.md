@@ -66,6 +66,8 @@ git push origin feature/your-feature-name
 
 ```bash
 git remote prune origin  
+git checkout main
+git pull origin main
 git branch -d feature/treetable
 
 ```
