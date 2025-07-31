@@ -170,20 +170,24 @@ export class XmDb {
         .prepare(`SELECT * FROM \`${type}\` WHERE delete_time IS NULL`)
         .all();
       const idMap = new Map();
-      const nameMap = new Map();
+      const namePidMap = new Map();
       for (const row of rows) {
         idMap.set(row.id, row);
-        if (row.name && !nameMap.has(row.name)) {
-          nameMap.set(row.name, row);
-        } else if (nameMap.has(row.name)) {
+        const compositeKey = `${row.name}_${row.pid}`;
+        if (!namePidMap.has(compositeKey)) {
+          namePidMap.set(compositeKey, row);
+        } else {
           XmDb.log(
-            `Duplicate name '${row.name}' in ${type} for ${dbName}, skipping keyCache entry`,
+            `Duplicate name+pid '${compositeKey}' in ${type} for ${dbName}, skipping keyCache entry`,
             "warn"
           );
         }
       }
       XmDb.cache.set(cacheKey, { data: idMap, lastUpdated: Date.now() });
-      XmDb.keyCache.set(cacheKey, { data: nameMap, lastUpdated: Date.now() });
+      XmDb.keyCache.set(cacheKey, {
+        data: namePidMap,
+        lastUpdated: Date.now(),
+      });
       XmDb.log(
         `Loaded ${rows.length} rows into cache for '${type}' in ${dbName}`
       );
@@ -222,12 +226,16 @@ export class XmDb {
       ) {
         throw new Error("pid not found in cache");
       }
-      if (uniqueFields.length === 1 && uniqueFields[0] === "name") {
-        const nameCache = XmDb.keyCache.get(cacheKey)?.data;
-        if (nameCache?.has(uniqueValues[0])) {
-          throw new Error(`Unique constraint violation for: name`);
-        }
+      const compositeKey = `${name}_${pid}`;
+      const namePidCache = XmDb.keyCache.get(cacheKey)?.data;
+      if (namePidCache?.has(compositeKey)) {
+        throw new Error(
+          `Unique constraint violation for name+pid: ${compositeKey}`
+        );
       }
+      //if (key === "") {
+      key = compositeKey;
+      //}
       if (uniqueFields.length > 0) {
         const conditions = uniqueFields.map((f) => `${f} = ?`).join(" AND ");
         const existing = db
@@ -247,17 +255,10 @@ export class XmDb {
         VALUES (?, ?, ?, strftime('%s', 'now'), strftime('%s', 'now')) RETURNING *`);
       const row = stmt.get(pid, name, key);
       const idCache = XmDb.cache.get(cacheKey)?.data;
-      const nameCache = XmDb.keyCache.get(cacheKey)?.data;
-      if (idCache && nameCache) {
+      const namePidCacheUpdate = XmDb.keyCache.get(cacheKey)?.data;
+      if (idCache && namePidCacheUpdate) {
         idCache.set(row.id, row);
-        if (row.name && !nameCache.has(row.name)) {
-          nameCache.set(row.name, row);
-        } else if (nameCache.has(row.name)) {
-          XmDb.log(
-            `Duplicate name '${row.name}' in ${type} for ${dbName}, skipping keyCache entry`,
-            "warn"
-          );
-        }
+        namePidCacheUpdate.set(`${row.name}_${row.pid}`, row);
       }
       return row;
     } catch (error) {
@@ -315,7 +316,21 @@ export class XmDb {
       if (!existing) {
         throw new Error(`Record with id ${id} not found in ${type}`);
       }
-
+      if (existing.update_time !== updates.update_time) {
+        throw new Error(`Record with id ${id} old  in ${type}`);
+      }
+      const cacheKey = `${dbName}:${type}`;
+      const compositeKey = `${updates.name}_${updates.pid}`;
+      if (existing.key !== compositeKey) {
+        const namePidCache = XmDb.keyCache.get(cacheKey)?.data;
+        if (namePidCache?.has(compositeKey)) {
+          throw new Error(
+            `Unique constraint violation for name+pid: ${compositeKey}`
+          );
+        }else{
+          updates.key = compositeKey
+        }
+      }
       const updatedData = {
         ...existing,
         ...updates,
@@ -332,17 +347,20 @@ export class XmDb {
         [...values, id]
       );
 
-      const cacheKey = `${dbName}:${type}`;
       const idCache = XmDb.cache.get(cacheKey)?.data;
-      const nameCache = XmDb.keyCache.get(cacheKey)?.data;
-      if (idCache && nameCache) {
-        if (updates.name && existing.name !== updates.name) {
-          nameCache.delete(existing.name);
-          if (!nameCache.has(updates.name)) {
-            nameCache.set(updates.name, updatedData);
+      const namePidCache = XmDb.keyCache.get(cacheKey)?.data;
+      if (idCache && namePidCache) {
+        const oldCompositeKey = `${existing.name}_${existing.pid}`;
+        const newName = updates.name || existing.name;
+        const newPid = updates.pid || existing.pid;
+        const newCompositeKey = `${newName}_${newPid}`;
+        if (newCompositeKey !== oldCompositeKey) {
+          namePidCache.delete(oldCompositeKey);
+          if (!namePidCache.has(newCompositeKey)) {
+            namePidCache.set(newCompositeKey, updatedData);
           } else {
             XmDb.log(
-              `Duplicate name '${updates.name}' in ${type} for ${dbName}, skipping keyCache update`,
+              `Duplicate name+pid '${newCompositeKey}' in ${type} for ${dbName}, skipping keyCache update`,
               "warn"
             );
           }
@@ -359,7 +377,7 @@ export class XmDb {
     }
   }
 
-  static async delete(type, id, soft = true, dbName = "xm1") {
+  static async delete(type, id, update_time, soft = true, dbName = "xm1") {
     try {
       await XmDb.ensureTable(type, dbName);
       const db = XmDb.dbs.get(dbName);
@@ -367,6 +385,9 @@ export class XmDb {
       const existing = await XmDb.read(type, id, dbName);
       if (!existing) {
         throw new Error(`Record with id ${id} not found in ${type}`);
+      }
+      if (type === "tree_node" && existing.update_time !== update_time) {
+        throw new Error(`Record with id ${id} old  in ${type}`);
       }
 
       const query = soft
@@ -376,10 +397,11 @@ export class XmDb {
 
       const cacheKey = `${dbName}:${type}`;
       const idCache = XmDb.cache.get(cacheKey)?.data;
-      const nameCache = XmDb.keyCache.get(cacheKey)?.data;
-      if (idCache && nameCache) {
+      const namePidCache = XmDb.keyCache.get(cacheKey)?.data;
+      if (idCache && namePidCache) {
         idCache.delete(id);
-        nameCache.delete(existing.name);
+        const compositeKey = `${existing.name}_${existing.pid}`;
+        namePidCache.delete(compositeKey);
       }
       return true;
     } catch (error) {
@@ -398,8 +420,8 @@ export class XmDb {
         pid,
         name,
         key,
-        ["name"],
-        [name],
+        [],
+        [],
         dbName
       );
       await XmDb.create(
@@ -407,8 +429,8 @@ export class XmDb {
         pid,
         name || `Item-${node.id}`,
         key || `list_${node.id}`,
-        ["name"],
-        [name || `Item-${node.id}`],
+        [],
+        [],
         dbName
       );
       return node;
@@ -439,10 +461,10 @@ export class XmDb {
     return await XmDb.update("tree_node", id, updates, dbName);
   }
 
-  static async deleteTreeNode(id, soft = true, dbName = "xm1") {
+  static async deleteTreeNode(id, update_time, soft = true, dbName = "xm1") {
     try {
-      await XmDb.delete("tree_node", id, soft, dbName);
-      await XmDb.delete("list_item", id, soft, dbName);
+      await XmDb.delete("tree_node", id, update_time, soft, dbName);
+      await XmDb.delete("list_item", id, update_time, soft, dbName);
       return true;
     } catch (error) {
       XmDb.log(

@@ -45,7 +45,9 @@ export class XmRouter {
       if (pathname === "/api/tree" && req.method === "POST") {
         return await XmRouter.handleTreeActions(req, dbName, acceptEncoding);
       }
-
+      if (pathname === "/api/list" && req.method === "POST") {
+        return await XmRouter.handleListActions(req, dbName, acceptEncoding);
+      }
       const match = XmRouter.router.match(pathname);
       if (match) {
         return await XmRouter.routerMatch(req, match, acceptEncoding);
@@ -126,7 +128,69 @@ export class XmRouter {
       );
     }
   }
+  static async handleListActions(req, dbName, acceptEncoding) {
+    try {
+      const base64Str = await req.text();
 
+      // 解 Base64
+      const jsonStr = Buffer.from(base64Str, "base64").toString("utf-8");
+
+      // 解析 JSON
+      let payload;
+      try {
+        payload = JSON.parse(jsonStr);
+      } catch (e) {
+        return XmRouter.gzipResponse(
+          { code: 400, msg: "Invalid JSON after Base64 decode" },
+          400
+        );
+      }
+
+      const { action, data } = payload;
+
+      switch (action) {
+        case "get":
+          return await XmRouter.handleList(req, dbName, acceptEncoding);
+        case "add":
+          return await XmRouter.handleCreateListNode(
+            req,
+            data,
+            dbName,
+            acceptEncoding
+          );
+        case "edit":
+          return await XmRouter.handleUpdateListNode(
+            req,
+            data,
+            dbName,
+            acceptEncoding
+          );
+        case "delete":
+          return await XmRouter.handleDeleteListNode(
+            req,
+            data,
+            dbName,
+            acceptEncoding
+          );
+        default:
+          return XmRouter.gzipResponse(
+            { code: 400, msg: `Invalid action: ${action}` },
+            400
+          );
+      }
+    } catch (error) {
+      if (process.env.NODE_ENV !== "production") {
+        console.error(
+          `[XmRouter] handleTreeActions error for ${dbName}:`,
+          error
+        );
+      }
+      return XmRouter.gzipResponse(
+        { code: 400, msg: `Invalid JSON payload: ${error.message}` },
+        400
+      );
+    }
+  }
   static async handleTree(req, dbName, acceptEncoding) {
     try {
       const trees = await XmDb.buildTree(0, dbName);
@@ -172,7 +236,6 @@ export class XmRouter {
             id: treeNode.id,
             pid: treeNode.pid,
             name: treeNode.name,
-            key: treeNode.key,
           },
         },
         201
@@ -201,6 +264,7 @@ export class XmRouter {
 
   static async handleUpdateTreeNode(req, data, dbName, acceptEncoding) {
     try {
+      console.log(data);
       const id = data.id;
       if (!id || !/^\d+$/.test(id)) {
         return XmRouter.gzipResponse(
@@ -210,8 +274,10 @@ export class XmRouter {
       }
       const updates = {};
       if (data.name) updates.name = data.name;
-      if (data.key !== undefined) updates.key = data.key;
       if (data.pid !== undefined) updates.pid = data.pid;
+      if (data.update_time !== undefined)
+        updates.update_time = data.update_time;
+
       const updated = await XmDb.updateTreeNode(id, updates, dbName);
       if (!updated) {
         return XmRouter.gzipResponse(
@@ -251,14 +317,16 @@ export class XmRouter {
 
   static async handleDeleteTreeNode(req, data, dbName, acceptEncoding) {
     try {
+      console.log(data);
       const id = data.id;
+      const update_time = data.update_time;
       if (!id || !/^\d+$/.test(id)) {
         return XmRouter.gzipResponse(
           { code: 400, msg: "Invalid tree node ID" },
           400
         );
       }
-      const result = await XmDb.deleteTreeNode(id, true, dbName);
+      const result = await XmDb.deleteTreeNode(id, update_time, true, dbName);
       if (!result) {
         return XmRouter.gzipResponse(
           { code: 404, msg: `Tree node not found in ${dbName}` },
