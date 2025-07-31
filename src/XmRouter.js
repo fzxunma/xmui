@@ -32,7 +32,15 @@ export class XmRouter {
       const url = new URL(req.url);
       const pathname = url.pathname;
       const dbName = url.searchParams.get("db") || "xm1";
-      const acceptEncoding = req.headers.get("Accept-Encoding") || "";
+      if (
+        !pathname ||
+        typeof pathname !== "string" ||
+        pathname.includes("[object Object]") ||
+        /[^a-zA-Z0-9\-_/\.]/.test(pathname) // 非法字符
+      ) {
+        console.warn("Blocked invalid pathname:", pathname);
+        return new Response("Invalid request path", { status: 400 });
+      }
 
       const validDbs = ["xm1", "xm2"];
       if (!validDbs.includes(dbName)) {
@@ -43,17 +51,33 @@ export class XmRouter {
       }
 
       if (pathname === "/api/tree" && req.method === "POST") {
-        return await XmRouter.handleTreeActions(req, dbName, acceptEncoding);
+        return await XmRouter.handleTreeActions(req, dbName);
       }
       if (pathname === "/api/list" && req.method === "POST") {
-        return await XmRouter.handleListActions(req, dbName, acceptEncoding);
+        return await XmRouter.handleListActions(req, dbName);
       }
-      const match = XmRouter.router.match(pathname);
-      if (match) {
-        return await XmRouter.routerMatch(req, match, acceptEncoding);
+      if (pathname === "/api/list/keys" && req.method === "GET") {
+        return await XmRouter.handleListKeys(req, dbName);
       }
-
-      return await XmStaticFs.serve(pathname);
+      if (pathname.startsWith("/api")) {
+        console.warn("Invalid API path:", pathname);
+        return XmRouter.gzipResponse(
+          { code: 404, msg: "Invalid API path" },
+          404
+        );
+      }
+      if (req.method === "GET") {
+        const match = XmRouter.router.match(pathname);
+        if (match) {
+          return await XmRouter.routerMatch(req, match);
+        }
+        return await XmStaticFs.serve(pathname);
+      } else {
+        return XmRouter.gzipResponse(
+          { code: 404, msg: "Invalid API path" },
+          404
+        );
+      }
     } catch (error) {
       if (process.env.NODE_ENV !== "production") {
         console.error("[XmRouter] Setup error:", error);
@@ -65,14 +89,10 @@ export class XmRouter {
     }
   }
 
-  static async handleTreeActions(req, dbName, acceptEncoding) {
+  static async handleTreeActions(req, dbName) {
     try {
       const base64Str = await req.text();
-
-      // 解 Base64
       const jsonStr = Buffer.from(base64Str, "base64").toString("utf-8");
-
-      // 解析 JSON
       let payload;
       try {
         payload = JSON.parse(jsonStr);
@@ -83,32 +103,17 @@ export class XmRouter {
         );
       }
 
-      const { action, data } = payload;
+      const { action, data, table } = payload;
 
       switch (action) {
         case "get":
-          return await XmRouter.handleTree(req, dbName, acceptEncoding);
+          return await XmRouter.handleTree(req, dbName, table);
         case "add":
-          return await XmRouter.handleCreateTreeNode(
-            req,
-            data,
-            dbName,
-            acceptEncoding
-          );
+          return await XmRouter.handleCreateTreeNode(req, data, dbName, table);
         case "edit":
-          return await XmRouter.handleUpdateTreeNode(
-            req,
-            data,
-            dbName,
-            acceptEncoding
-          );
+          return await XmRouter.handleUpdateTreeNode(req, data, dbName, table);
         case "delete":
-          return await XmRouter.handleDeleteTreeNode(
-            req,
-            data,
-            dbName,
-            acceptEncoding
-          );
+          return await XmRouter.handleDeleteTreeNode(req, data, dbName, table);
         default:
           return XmRouter.gzipResponse(
             { code: 400, msg: `Invalid action: ${action}` },
@@ -128,14 +133,11 @@ export class XmRouter {
       );
     }
   }
-  static async handleListActions(req, dbName, acceptEncoding) {
+
+  static async handleListActions(req, dbName) {
     try {
       const base64Str = await req.text();
-
-      // 解 Base64
       const jsonStr = Buffer.from(base64Str, "base64").toString("utf-8");
-
-      // 解析 JSON
       let payload;
       try {
         payload = JSON.parse(jsonStr);
@@ -146,32 +148,17 @@ export class XmRouter {
         );
       }
 
-      const { action, data } = payload;
-
+      const { action, table, data } = payload;
+      console.log("handleListActions", payload);
       switch (action) {
         case "get":
-          return await XmRouter.handleList(req, dbName, acceptEncoding);
+          return await XmRouter.handleList(req, data, dbName, table);
         case "add":
-          return await XmRouter.handleCreateListNode(
-            req,
-            data,
-            dbName,
-            acceptEncoding
-          );
+          return await XmRouter.handleCreateListNode(req, data, dbName, table);
         case "edit":
-          return await XmRouter.handleUpdateListNode(
-            req,
-            data,
-            dbName,
-            acceptEncoding
-          );
+          return await XmRouter.handleUpdateListNode(req, data, dbName, table);
         case "delete":
-          return await XmRouter.handleDeleteListNode(
-            req,
-            data,
-            dbName,
-            acceptEncoding
-          );
+          return await XmRouter.handleDeleteListNode(req, data, dbName, table);
         default:
           return XmRouter.gzipResponse(
             { code: 400, msg: `Invalid action: ${action}` },
@@ -181,7 +168,7 @@ export class XmRouter {
     } catch (error) {
       if (process.env.NODE_ENV !== "production") {
         console.error(
-          `[XmRouter] handleTreeActions error for ${dbName}:`,
+          `[XmRouter] handleListActions error for ${dbName}:`,
           error
         );
       }
@@ -191,7 +178,8 @@ export class XmRouter {
       );
     }
   }
-  static async handleTree(req, dbName, acceptEncoding) {
+
+  static async handleTree(req, dbName) {
     try {
       const trees = await XmDb.buildTree(0, dbName);
       if (!trees || !trees.length) {
@@ -218,7 +206,7 @@ export class XmRouter {
     }
   }
 
-  static async handleCreateTreeNode(req, data, dbName, acceptEncoding) {
+  static async handleCreateTreeNode(req, data, dbName) {
     try {
       if (!data.name || typeof data.name !== "string") {
         return XmRouter.gzipResponse(
@@ -236,6 +224,7 @@ export class XmRouter {
             id: treeNode.id,
             pid: treeNode.pid,
             name: treeNode.name,
+            key: treeNode.key,
           },
         },
         201
@@ -262,9 +251,8 @@ export class XmRouter {
     }
   }
 
-  static async handleUpdateTreeNode(req, data, dbName, acceptEncoding) {
+  static async handleUpdateTreeNode(req, data, dbName) {
     try {
-      console.log(data);
       const id = data.id;
       if (!id || !/^\d+$/.test(id)) {
         return XmRouter.gzipResponse(
@@ -275,9 +263,6 @@ export class XmRouter {
       const updates = {};
       if (data.name) updates.name = data.name;
       if (data.pid !== undefined) updates.pid = data.pid;
-      if (data.update_time !== undefined)
-        updates.update_time = data.update_time;
-
       const updated = await XmDb.updateTreeNode(id, updates, dbName);
       if (!updated) {
         return XmRouter.gzipResponse(
@@ -315,18 +300,16 @@ export class XmRouter {
     }
   }
 
-  static async handleDeleteTreeNode(req, data, dbName, acceptEncoding) {
+  static async handleDeleteTreeNode(req, data, dbName) {
     try {
-      console.log(data);
       const id = data.id;
-      const update_time = data.update_time;
       if (!id || !/^\d+$/.test(id)) {
         return XmRouter.gzipResponse(
           { code: 400, msg: "Invalid tree node ID" },
           400
         );
       }
-      const result = await XmDb.deleteTreeNode(id, update_time, true, dbName);
+      const result = await XmDb.deleteTreeNode(id, true, dbName);
       if (!result) {
         return XmRouter.gzipResponse(
           { code: 404, msg: `Tree node not found in ${dbName}` },
@@ -354,7 +337,198 @@ export class XmRouter {
     }
   }
 
-  static async routerMatch(req, match, acceptEncoding) {
+  static async handleList(req, data, dbName, table) {
+    try {
+      const pid = data.pid || 0;
+      const page = data.page || 1;
+      const limit = data.limit || 10;
+      const listItems = await XmDb.getListItems(
+        pid,
+        page,
+        limit,
+        dbName,
+        table
+      );
+ 
+      return XmRouter.gzipResponse(
+        { code: 0, msg: "Success", data: listItems },
+        200
+      );
+    } catch (error) {
+      if (process.env.NODE_ENV !== "production") {
+        console.error(`[XmRouter] handleList error for ${dbName}:`, error);
+      }
+      return XmRouter.gzipResponse(
+        {
+          code: 500,
+          msg: `Failed to fetch list items in ${dbName}: ${error.message}`,
+        },
+        500
+      );
+    }
+  }
+
+  static async handleCreateListNode(req, data, dbName) {
+    try {
+      if (!data.name || typeof data.name !== "string") {
+        return XmRouter.gzipResponse(
+          { code: 400, msg: "Name is required and must be a string" },
+          400
+        );
+      }
+      const { pid, name, key } = data;
+      const listNode = await XmDb.createListItem(
+        pid,
+        name,
+        key,
+        [],
+        [],
+        dbName
+      );
+      return XmRouter.gzipResponse(
+        {
+          code: 0,
+          msg: "List item created successfully",
+          data: {
+            id: listNode.id,
+            pid: listNode.pid,
+            name: listNode.name,
+            key: listNode.key,
+          },
+        },
+        201
+      );
+    } catch (error) {
+      if (process.env.NODE_ENV !== "production") {
+        console.error(
+          `[XmRouter] handleCreateListNode error for ${dbName}:`,
+          error
+        );
+      }
+      const code =
+        error.message.includes("Unique constraint violation") ||
+        error.message.includes("Invalid")
+          ? 400
+          : 500;
+      return XmRouter.gzipResponse(
+        {
+          code,
+          msg: `Failed to create list item in ${dbName}: ${error.message}`,
+        },
+        code
+      );
+    }
+  }
+
+  static async handleUpdateListNode(req, data, dbName) {
+    try {
+      const id = data.id;
+      if (!id || !/^\d+$/.test(id)) {
+        return XmRouter.gzipResponse(
+          { code: 400, msg: "Invalid list item ID" },
+          400
+        );
+      }
+      const updates = {};
+      if (data.name) updates.name = data.name;
+      if (data.pid !== undefined) updates.pid = data.pid;
+      if (data.key !== undefined) updates.key = data.key;
+      const updated = await XmDb.updateListItem(id, updates, dbName);
+      if (!updated) {
+        return XmRouter.gzipResponse(
+          { code: 404, msg: `List item not found in ${dbName}` },
+          404
+        );
+      }
+      return XmRouter.gzipResponse(
+        {
+          code: 0,
+          msg: "List item updated successfully",
+          data: {
+            id: updated.id,
+            pid: updated.pid,
+            name: updated.name,
+            key: updated.key,
+          },
+        },
+        200
+      );
+    } catch (error) {
+      if (process.env.NODE_ENV !== "production") {
+        console.error(
+          `[XmRouter] handleUpdateListNode error for ${dbName}:`,
+          error
+        );
+      }
+      return XmRouter.gzipResponse(
+        {
+          code: 500,
+          msg: `Failed to update list item in ${dbName}: ${error.message}`,
+        },
+        500
+      );
+    }
+  }
+
+  static async handleDeleteListNode(req, data, dbName) {
+    try {
+      const id = data.id;
+      if (!id || !/^\d+$/.test(id)) {
+        return XmRouter.gzipResponse(
+          { code: 400, msg: "Invalid list item ID" },
+          400
+        );
+      }
+      const result = await XmDb.deleteListItem(id, true, dbName);
+      if (!result) {
+        return XmRouter.gzipResponse(
+          { code: 404, msg: `List item not found in ${dbName}` },
+          404
+        );
+      }
+      return XmRouter.gzipResponse(
+        { code: 0, msg: "List item deleted successfully" },
+        200
+      );
+    } catch (error) {
+      if (process.env.NODE_ENV !== "production") {
+        console.error(
+          `[XmRouter] handleDeleteListNode error for ${dbName}:`,
+          error
+        );
+      }
+      return XmRouter.gzipResponse(
+        {
+          code: 500,
+          msg: `Failed to delete list item in ${dbName}: ${error.message}`,
+        },
+        500
+      );
+    }
+  }
+
+  static async handleListKeys(req, dbName) {
+    try {
+      const keys = await XmDb.getListKeys(dbName);
+      return XmRouter.gzipResponse(
+        { code: 0, msg: "Success", data: keys },
+        200
+      );
+    } catch (error) {
+      if (process.env.NODE_ENV !== "production") {
+        console.error(`[XmRouter] handleListKeys error for ${dbName}:`, error);
+      }
+      return XmRouter.gzipResponse(
+        {
+          code: 500,
+          msg: `Failed to fetch list keys in ${dbName}: ${error.message}`,
+        },
+        500
+      );
+    }
+  }
+
+  static async routerMatch(req, match) {
     try {
       const file = Bun.file(match.filePath);
       if (!(await file.exists())) {

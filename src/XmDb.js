@@ -2,9 +2,10 @@ import { Database } from "bun:sqlite";
 
 export class XmDb {
   static dbs = new Map();
-  static cache = new Map();
+  static idCache = new Map();
   static keyCache = new Map();
-  static knownTypes = ["tree_node", "list_item"];
+  static pidCache = new Map();
+  static knownTypes = ["tree", "list"];
   static baseFields = `
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     pid INTEGER DEFAULT 0,
@@ -15,8 +16,8 @@ export class XmDb {
     delete_time INTEGER DEFAULT NULL
   `;
   static schema = {
-    tree_node: XmDb.baseFields,
-    list_item: XmDb.baseFields,
+    tree: XmDb.baseFields,
+    list: XmDb.baseFields,
   };
 
   static log(message, level = "info") {
@@ -53,7 +54,7 @@ export class XmDb {
       XmDb.log(`Initializing data for ${dbName}...`);
       try {
         const root1 = await XmDb.create(
-          "tree_node",
+          "tree",
           0,
           "Root1",
           "",
@@ -61,9 +62,9 @@ export class XmDb {
           [],
           dbName
         );
-        await XmDb.loadTable("tree_node", dbName); // Reload cache
+        await XmDb.loadTable("tree", dbName);
         const root2 = await XmDb.create(
-          "tree_node",
+          "tree",
           0,
           "Root2",
           "",
@@ -71,13 +72,13 @@ export class XmDb {
           [],
           dbName
         );
-        await XmDb.loadTable("tree_node", dbName); // Reload cache
+        await XmDb.loadTable("tree", dbName);
         const rootId1 = root1.id;
         const rootId2 = root2.id;
         const childIds = [];
         for (let i = 1; i <= 5; i++) {
           const child = await XmDb.create(
-            "tree_node",
+            "tree",
             rootId1,
             `Child-${i}`,
             "",
@@ -85,21 +86,21 @@ export class XmDb {
             [],
             dbName
           );
-          await XmDb.loadTable("tree_node", dbName); // Reload cache
+          await XmDb.loadTable("tree", dbName);
           childIds.push(child.id);
           await XmDb.create(
-            "list_item",
+            "list",
             rootId1,
             `Item-Child-${i}`,
-            `list_${child.id}`,
-            ["name"],
-            [`Item-Child-${i}`],
+            "",
+            [],
+            [],
             dbName
           );
         }
 
         const subchild = await XmDb.create(
-          "tree_node",
+          "tree",
           childIds[0],
           "Subchild-1",
           "",
@@ -107,36 +108,27 @@ export class XmDb {
           [],
           dbName
         );
-        await XmDb.loadTable("tree_node", dbName); // Reload cache
+        await XmDb.loadTable("tree", dbName);
         await XmDb.create(
-          "list_item",
+          "list",
           childIds[0],
           "Item-Subchild-1",
-          `list_${subchild.id}`,
-          ["name"],
-          ["Item-Subchild-1"],
+          "",
+          [],
+          [],
           dbName
         );
 
         for (let i = 1; i <= 5; i++) {
-          await XmDb.create(
-            "list_item",
-            0,
-            `Item-${i}`,
-            "default_list",
-            ["name"],
-            [`Item-${i}`],
-            dbName
-          );
+          await XmDb.create("list", 0, `root-${i}`, "", [], [], dbName);
         }
-        await XmDb.loadTable("list_item", dbName); // Reload cache
+        await XmDb.loadTable("list", dbName);
         XmDb.log(`Data initialization completed for ${dbName}.`);
       } catch (error) {
         XmDb.log(
           `Initialization failed for ${dbName}: ${error.message}`,
           "error"
         );
-        //throw error;
       }
     }
   }
@@ -145,7 +137,7 @@ export class XmDb {
     try {
       if (!XmDb.schema[type]) throw new Error(`Unknown type: ${type}`);
       const cacheKey = `${dbName}:${type}`;
-      if (!XmDb.cache.has(cacheKey)) {
+      if (!XmDb.idCache.has(cacheKey)) {
         const db = XmDb.dbs.get(dbName);
         if (!db) throw new Error(`Database ${dbName} not found`);
         XmDb.log(`Ensuring table '${type}' exists in ${dbName}...`);
@@ -171,6 +163,7 @@ export class XmDb {
         .all();
       const idMap = new Map();
       const namePidMap = new Map();
+      const pidMap = new Map();
       for (const row of rows) {
         idMap.set(row.id, row);
         const compositeKey = `${row.name}_${row.pid}`;
@@ -182,12 +175,18 @@ export class XmDb {
             "warn"
           );
         }
+        const pidKey = row.pid;
+        if (!pidMap.has(pidKey)) {
+          pidMap.set(pidKey, []);
+        }
+        pidMap.get(pidKey).push(row);
       }
-      XmDb.cache.set(cacheKey, { data: idMap, lastUpdated: Date.now() });
+      XmDb.idCache.set(cacheKey, { data: idMap, lastUpdated: Date.now() });
       XmDb.keyCache.set(cacheKey, {
         data: namePidMap,
         lastUpdated: Date.now(),
       });
+      XmDb.pidCache.set(cacheKey, { data: pidMap, lastUpdated: Date.now() });
       XmDb.log(
         `Loaded ${rows.length} rows into cache for '${type}' in ${dbName}`
       );
@@ -196,8 +195,9 @@ export class XmDb {
         `Failed to load table ${type} in ${dbName}: ${error.message}`,
         "error"
       );
-      XmDb.cache.set(cacheKey, { data: new Map(), lastUpdated: Date.now() });
+      XmDb.idCache.set(cacheKey, { data: new Map(), lastUpdated: Date.now() });
       XmDb.keyCache.set(cacheKey, { data: new Map(), lastUpdated: Date.now() });
+      XmDb.pidCache.set(cacheKey, { data: new Map(), lastUpdated: Date.now() });
     }
   }
 
@@ -218,11 +218,10 @@ export class XmDb {
         throw new Error("Mismatch between uniqueFields and uniqueValues");
       }
       const cacheKey = `${dbName}:${type}`;
-      console.log(type, pid, name, cacheKey);
       if (
-        type === "tree_node" &&
+        type === "tree" &&
         pid !== 0 &&
-        !XmDb.cache.get(cacheKey)?.data.has(pid)
+        !XmDb.idCache.get(cacheKey)?.data.has(pid)
       ) {
         throw new Error("pid not found in cache");
       }
@@ -254,11 +253,16 @@ export class XmDb {
         INSERT INTO \`${type}\` (pid, name, key, create_time, update_time)
         VALUES (?, ?, ?, strftime('%s', 'now'), strftime('%s', 'now')) RETURNING *`);
       const row = stmt.get(pid, name, key);
-      const idCache = XmDb.cache.get(cacheKey)?.data;
+      const idCache = XmDb.idCache.get(cacheKey)?.data;
       const namePidCacheUpdate = XmDb.keyCache.get(cacheKey)?.data;
-      if (idCache && namePidCacheUpdate) {
+      const pidCacheUpdate = XmDb.pidCache.get(cacheKey)?.data;
+      if (idCache && namePidCacheUpdate && pidCacheUpdate) {
         idCache.set(row.id, row);
         namePidCacheUpdate.set(`${row.name}_${row.pid}`, row);
+        if (!pidCacheUpdate.has(row.pid)) {
+          pidCacheUpdate.set(row.pid, []);
+        }
+        pidCacheUpdate.get(row.pid).push(row);
       }
       return row;
     } catch (error) {
@@ -275,7 +279,7 @@ export class XmDb {
     try {
       await XmDb.ensureTable(type, dbName);
       const cacheKey = `${dbName}:${type}`;
-      const cache = XmDb.cache.get(cacheKey);
+      const cache = XmDb.idCache.get(cacheKey);
       if (cache && Date.now() - cache.lastUpdated > 60000) {
         await XmDb.loadTable(type, dbName);
       }
@@ -289,7 +293,7 @@ export class XmDb {
     }
   }
 
-  static async readByName(type, name, dbName = "xm1") {
+  static async readByName(type, compositeKey, dbName = "xm1") {
     try {
       await XmDb.ensureTable(type, dbName);
       const cacheKey = `${dbName}:${type}`;
@@ -297,10 +301,10 @@ export class XmDb {
       if (cache && Date.now() - cache.lastUpdated > 60000) {
         await XmDb.loadTable(type, dbName);
       }
-      return cache?.data.get(name) ?? null;
+      return cache?.data.get(compositeKey) ?? null;
     } catch (error) {
       XmDb.log(
-        `Read ${type} by name ${name} failed in ${dbName}: ${error.message}`,
+        `Read ${type} by name+pid ${compositeKey} failed in ${dbName}: ${error.message}`,
         "error"
       );
       throw error;
@@ -316,20 +320,20 @@ export class XmDb {
       if (!existing) {
         throw new Error(`Record with id ${id} not found in ${type}`);
       }
-      if (existing.update_time !== updates.update_time) {
-        throw new Error(`Record with id ${id} old  in ${type}`);
+      const newName = updates.name || existing.name;
+      const newPid = updates.pid !== undefined ? updates.pid : existing.pid;
+      const compositeKey = `${newName}_${newPid}`;
+      if (!updates.key || updates.key === "") {
+        updates.key = compositeKey;
       }
-      const cacheKey = `${dbName}:${type}`;
-      const compositeKey = `${updates.name}_${updates.pid}`;
-      if (existing.key !== compositeKey) {
-        const namePidCache = XmDb.keyCache.get(cacheKey)?.data;
-        if (namePidCache?.has(compositeKey)) {
-          throw new Error(
-            `Unique constraint violation for name+pid: ${compositeKey}`
-          );
-        }else{
-          updates.key = compositeKey
-        }
+      const namePidCache = XmDb.keyCache.get(`${dbName}:${type}`)?.data;
+      if (
+        namePidCache?.has(compositeKey) &&
+        compositeKey !== `${existing.name}_${existing.pid}`
+      ) {
+        throw new Error(
+          `Unique constraint violation for name+pid: ${compositeKey}`
+        );
       }
       const updatedData = {
         ...existing,
@@ -347,23 +351,27 @@ export class XmDb {
         [...values, id]
       );
 
-      const idCache = XmDb.cache.get(cacheKey)?.data;
-      const namePidCache = XmDb.keyCache.get(cacheKey)?.data;
-      if (idCache && namePidCache) {
+      const cacheKey = `${dbName}:${type}`;
+      const idCache = XmDb.idCache.get(cacheKey)?.data;
+      const namePidCacheUpdate = XmDb.keyCache.get(cacheKey)?.data;
+      const pidCacheUpdate = XmDb.pidCache.get(cacheKey)?.data;
+      if (idCache && namePidCacheUpdate && pidCacheUpdate) {
         const oldCompositeKey = `${existing.name}_${existing.pid}`;
-        const newName = updates.name || existing.name;
-        const newPid = updates.pid || existing.pid;
-        const newCompositeKey = `${newName}_${newPid}`;
-        if (newCompositeKey !== oldCompositeKey) {
-          namePidCache.delete(oldCompositeKey);
-          if (!namePidCache.has(newCompositeKey)) {
-            namePidCache.set(newCompositeKey, updatedData);
-          } else {
-            XmDb.log(
-              `Duplicate name+pid '${newCompositeKey}' in ${type} for ${dbName}, skipping keyCache update`,
-              "warn"
+        if (compositeKey !== oldCompositeKey) {
+          namePidCacheUpdate.delete(oldCompositeKey);
+          namePidCacheUpdate.set(compositeKey, updatedData);
+        }
+        if (existing.pid !== newPid) {
+          if (pidCacheUpdate.has(existing.pid)) {
+            pidCacheUpdate.set(
+              existing.pid,
+              pidCacheUpdate.get(existing.pid).filter((row) => row.id !== id)
             );
           }
+          if (!pidCacheUpdate.has(newPid)) {
+            pidCacheUpdate.set(newPid, []);
+          }
+          pidCacheUpdate.get(newPid).push(updatedData);
         }
         idCache.set(id, updatedData);
       }
@@ -377,7 +385,7 @@ export class XmDb {
     }
   }
 
-  static async delete(type, id, update_time, soft = true, dbName = "xm1") {
+  static async delete(type, id, soft = true, dbName = "xm1") {
     try {
       await XmDb.ensureTable(type, dbName);
       const db = XmDb.dbs.get(dbName);
@@ -386,7 +394,7 @@ export class XmDb {
       if (!existing) {
         throw new Error(`Record with id ${id} not found in ${type}`);
       }
-      if (type === "tree_node" && existing.update_time !== update_time) {
+      if (type === "tree" && existing.update_time !== update_time) {
         throw new Error(`Record with id ${id} old  in ${type}`);
       }
 
@@ -396,12 +404,19 @@ export class XmDb {
       db.run(query, [id]);
 
       const cacheKey = `${dbName}:${type}`;
-      const idCache = XmDb.cache.get(cacheKey)?.data;
+      const idCache = XmDb.idCache.get(cacheKey)?.data;
       const namePidCache = XmDb.keyCache.get(cacheKey)?.data;
-      if (idCache && namePidCache) {
+      const pidCacheUpdate = XmDb.pidCache.get(cacheKey)?.data;
+      if (idCache && namePidCache && pidCacheUpdate) {
         idCache.delete(id);
         const compositeKey = `${existing.name}_${existing.pid}`;
         namePidCache.delete(compositeKey);
+        if (pidCacheUpdate.has(existing.pid)) {
+          pidCacheUpdate.set(
+            existing.pid,
+            pidCacheUpdate.get(existing.pid).filter((row) => row.id !== id)
+          );
+        }
       }
       return true;
     } catch (error) {
@@ -416,7 +431,7 @@ export class XmDb {
   static async createTreeNode(pid = 0, name = "", key = "", dbName = "xm1") {
     try {
       const node = await XmDb.create(
-        "tree_node",
+        "tree",
         pid,
         name,
         key,
@@ -424,15 +439,15 @@ export class XmDb {
         [],
         dbName
       );
-      await XmDb.create(
-        "list_item",
-        pid,
-        name || `Item-${node.id}`,
-        key || `list_${node.id}`,
-        [],
-        [],
-        dbName
-      );
+      // await XmDb.create(
+      //   "list",
+      //   pid,
+      //   name || `Item-${node.id}`,
+      //   key || `list_${node.id}`,
+      //   [],
+      //   [],
+      //   dbName
+      // );
       return node;
     } catch (error) {
       XmDb.log(
@@ -445,8 +460,8 @@ export class XmDb {
 
   static async getTreeNode(id, dbName = "xm1") {
     try {
-      const tree = await XmDb.read("tree_node", id, dbName);
-      const list = await XmDb.read("list_item", id, dbName);
+      const tree = await XmDb.read("tree", id, dbName);
+      const list = await XmDb.read("list", id, dbName);
       return { tree, list };
     } catch (error) {
       XmDb.log(
@@ -458,13 +473,13 @@ export class XmDb {
   }
 
   static async updateTreeNode(id, updates, dbName = "xm1") {
-    return await XmDb.update("tree_node", id, updates, dbName);
+    return await XmDb.update("tree", id, updates, dbName);
   }
 
-  static async deleteTreeNode(id, update_time, soft = true, dbName = "xm1") {
+  static async deleteTreeNode(id, soft = true, dbName = "xm1") {
     try {
-      await XmDb.delete("tree_node", id, update_time, soft, dbName);
-      await XmDb.delete("list_item", id, update_time, soft, dbName);
+      await XmDb.delete("tree", id, soft, dbName);
+      await XmDb.delete("list", id, soft, dbName);
       return true;
     } catch (error) {
       XmDb.log(
@@ -477,17 +492,13 @@ export class XmDb {
 
   static async getChildren(pid, dbName = "xm1") {
     try {
-      await XmDb.ensureTable("tree_node", dbName);
-      const cacheKey = `${dbName}:tree_node`;
-      const data = XmDb.cache.get(cacheKey)?.data ?? new Map();
-      if (!(data instanceof Map)) {
-        XmDb.log(
-          `Cache for tree_node is invalid in ${dbName}, reloading...`,
-          "warn"
-        );
-        await XmDb.loadTable("tree_node", dbName);
+      await XmDb.ensureTable("tree", dbName);
+      const cacheKey = `${dbName}:tree`;
+      const cache = XmDb.pidCache.get(cacheKey);
+      if (cache && Date.now() - cache.lastUpdated > 60000) {
+        await XmDb.loadTable("tree", dbName);
       }
-      return [...data.values()].filter((n) => n.pid === pid);
+      return cache?.data.get(pid) ?? [];
     } catch (error) {
       XmDb.log(
         `Get children for pid ${pid} failed in ${dbName}: ${error.message}`,
@@ -499,19 +510,19 @@ export class XmDb {
 
   static async buildTree(root_id = 0, dbName = "xm1") {
     try {
-      await XmDb.ensureTable("tree_node", dbName);
-      await XmDb.ensureTable("list_item", dbName);
-      const cacheKeyTree = `${dbName}:tree_node`;
-      const cacheKeyList = `${dbName}:list_item`;
+      await XmDb.ensureTable("tree", dbName);
+      await XmDb.ensureTable("list", dbName);
+      const cacheKeyTree = `${dbName}:tree`;
+      const cacheKeyList = `${dbName}:list`;
 
-      let treeCache = XmDb.cache.get(cacheKeyTree);
+      let treeCache = XmDb.idCache.get(cacheKeyTree);
       let listCache = XmDb.keyCache.get(cacheKeyList);
       if (!treeCache || Date.now() - treeCache.lastUpdated > 60000) {
-        await XmDb.loadTable("tree_node", dbName);
-        treeCache = XmDb.cache.get(cacheKeyTree);
+        await XmDb.loadTable("tree", dbName);
+        treeCache = XmDb.idCache.get(cacheKeyTree);
       }
       if (!listCache || Date.now() - listCache.lastUpdated > 60000) {
-        await XmDb.loadTable("list_item", dbName);
+        await XmDb.loadTable("list", dbName);
         listCache = XmDb.keyCache.get(cacheKeyList);
       }
 
@@ -530,7 +541,7 @@ export class XmDb {
           .filter((n) => n.pid === id)
           .map((n) => build(n.id))
           .filter(Boolean);
-        return { ...node, list_item: listMap.get(id), children };
+        return { ...node, list: listMap.get(id), children };
       };
       if (root_id !== 0) {
         const tree = build(root_id);
@@ -558,7 +569,7 @@ export class XmDb {
     dbName = "xm1"
   ) {
     return await XmDb.create(
-      "list_item",
+      "list",
       pid,
       name,
       key,
@@ -569,26 +580,27 @@ export class XmDb {
   }
 
   static async getListItem(id, dbName = "xm1") {
-    return await XmDb.read("list_item", id, dbName);
+    return await XmDb.read("list", id, dbName);
   }
 
-  static async getListItemByName(name, dbName = "xm1") {
-    return await XmDb.readByName("list_item", name, dbName);
+  static async getListItemByName(compositeKey, dbName = "xm1") {
+    return await XmDb.readByName("list", compositeKey, dbName);
   }
 
   static async updateListItem(id, updates, dbName = "xm1") {
-    return await XmDb.update("list_item", id, updates, dbName);
+    return await XmDb.update("list", id, updates, dbName);
   }
 
   static async deleteListItem(id, soft = true, dbName = "xm1") {
-    return await XmDb.delete("list_item", id, soft, dbName);
+    return await XmDb.delete("list", id, soft, dbName);
   }
 
   static async getListItems(
-    key = "default_list",
+    pid = 0,
     page = 1,
     limit = 10,
-    dbName = "xm1"
+    dbName = "xm1",
+    table = "tree"
   ) {
     try {
       const db = XmDb.dbs.get(dbName);
@@ -596,18 +608,18 @@ export class XmDb {
       const offset = (page - 1) * limit;
       const rows = db
         .prepare(
-          `SELECT * FROM \`list_item\` WHERE key = ? AND delete_time IS NULL LIMIT ? OFFSET ?`
+          `SELECT * FROM \`${table}\` WHERE pid = ? AND delete_time IS NULL LIMIT ? OFFSET ?`
         )
-        .all(key, limit, offset);
+        .all(pid, limit, offset);
       const count = db
         .prepare(
-          `SELECT COUNT(*) as count FROM \`list_item\` WHERE key = ? AND delete_time IS NULL`
+          `SELECT COUNT(*) as count FROM \`${table}\` WHERE pid = ? AND delete_time IS NULL`
         )
-        .get(key).count;
+        .get(pid).count;
       return { rows, total: count };
     } catch (error) {
       XmDb.log(
-        `Get list items for key ${key} failed in ${dbName}: ${error.message}`,
+        `Get list items for pid ${pid} failed in ${dbName} ${table}: ${error.message}`,
         "error"
       );
       throw error;
@@ -619,7 +631,7 @@ export class XmDb {
       const db = XmDb.dbs.get(dbName);
       if (!db) throw new Error(`Database ${dbName} not found`);
       const items = db
-        .prepare("SELECT * FROM `list_item` WHERE delete_time IS NULL")
+        .prepare("SELECT * FROM `list` WHERE delete_time IS NULL")
         .all();
       const groups = {};
       for (const item of items) {
@@ -628,17 +640,9 @@ export class XmDb {
         groups[key].push(item);
       }
       for (const groupKey in groups) {
-        const node = await XmDb.create(
-          "tree_node",
-          0,
-          groupKey,
-          "",
-          [],
-          [],
-          dbName
-        );
+        const node = await XmDb.create("tree", 0, groupKey, "", [], [], dbName);
         for (const item of groups[groupKey]) {
-          await XmDb.update("list_item", item.id, { pid: node.id }, dbName);
+          await XmDb.update("list", item.id, { pid: node.id }, dbName);
         }
       }
     } catch (error) {
@@ -663,7 +667,8 @@ export class XmDb {
       }
     }
     XmDb.dbs.clear();
-    XmDb.cache.clear();
+    XmDb.idCache.clear();
     XmDb.keyCache.clear();
+    XmDb.pidCache.clear();
   }
 }
