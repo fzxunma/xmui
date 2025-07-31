@@ -20,19 +20,9 @@ export default {
       }
     }
 
-    async function fetchUsers() {
-      try {
-        const response = await fetch("/api/users");
-        if (response.ok) {
-          users.value = (await response.json()).users;
-        }
-      } catch (error) {
-        console.error("Fetch /api/users error:", error);
-      }
-    }
+ 
 
     fetchB2();
-    fetchUsers();
     const meeting = ref({
       name: "示例会议",
       date: "2025-08-01",

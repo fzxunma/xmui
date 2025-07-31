@@ -19,19 +19,7 @@ export default {
       }
     }
 
-    async function fetchUsers() {
-      try {
-        const response = await fetch("/api/users");
-        if (response.ok) {
-          users.value = (await response.json()).users;
-        }
-      } catch (error) {
-        console.error("Fetch /api/users error:", error);
-      }
-    }
-
     fetchB2();
-    fetchUsers();
 
     return { message, b2Data, users };
   },

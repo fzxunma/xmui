@@ -280,7 +280,7 @@ export class XmDbCRUD {
       }
 
       // 检查版本一致性
-      if (expectedVersion !== null && existing.version !== expectedVersion) {
+      if (existing.version !== expectedVersion) {
         const errorMsg = `Version conflict: expected ${expectedVersion}, but found ${existing.version} for ${type} id ${id} in ${dbName}`;
         XmDb.log(errorMsg, "warn");
 

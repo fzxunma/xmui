@@ -31,6 +31,8 @@ export default {
         pid: node.pid !== null ? node.pid : null,
         name: node.name,
         key: node.key,
+        version: node.version,
+        data: node.data
       }));
     });
 
@@ -47,6 +49,8 @@ export default {
           return parent ? parent.label : 'None';
         }
       },
+      { title: 'Version', key: 'version', width: 80 },
+      { title: 'Data', key: 'data', width: 150 },
       {
         title: 'Actions',
         key: 'actions',
@@ -117,10 +121,13 @@ export default {
       const input = {
         name: currentTreeNode.value.name,
         pid: currentTreeNode.value.pid !== null ? currentTreeNode.value.pid : null,
+        version: currentTreeNode.value.version,
+        data: currentTreeNode.value.data,
       };
       try {
         const action = isTreeEdit.value ? 'edit' : 'add';
         if (isTreeEdit.value) input.id = currentTreeNode.value.id;
+        console.log(input)
         const data = await XmApiRequest(action, input, table.value);
         if (data.code !== 0) {
           throw new Error(data.msg || 'Failed to save tree node');
@@ -156,6 +163,8 @@ export default {
         pid: selectedKeys.value.length ? selectedKeys.value[0] : null,
         name: '',
         key: '',
+        version: 1,
+        data: '',
       };
       showTreeModal.value = true;
     };
@@ -167,6 +176,8 @@ export default {
         pid: node.pid !== null ? node.pid : null,
         name: node.name,
         key: node.key,
+        version: node.version,
+        data: node.data,
       };
       showTreeModal.value = true;
     };
@@ -266,6 +277,9 @@ export default {
         <n-form-item label="Name">
           <n-input v-model:value="currentTreeNode.name" placeholder="Enter name" />
         </n-form-item>
+        <n-form-item label="value">
+          <n-input v-model:value="currentTreeNode.data" placeholder="Enter value" />
+        </n-form-item>
         <n-form-item label="Parent" v-if="isTreeEdit">
           <n-tree-select v-model:value="currentTreeNode.pid" :options="flatTreeNodes" placeholder="Select parent"
             value-field="id" label-field="name" key-field="id" clearable />
@@ -274,6 +288,9 @@ export default {
           <n-input
             :value="selectedKeys.length ? flatTreeNodes.find(n => n.value === selectedKeys[0])?.label || 'None' : 'None'"
             disabled />
+        </n-form-item>
+        <n-form-item label="version">
+          <n-input :value="currentTreeNode.version" disabled />
         </n-form-item>
       </n-form>
       <template #footer>

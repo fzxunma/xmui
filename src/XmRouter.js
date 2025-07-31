@@ -105,12 +105,11 @@ export class XmRouter {
         case "list":
           return await XmRouter.handleList(req, data, dbName, table);
         case "add":
-          return await XmRouter.handleCreateTreeNode(req, data, dbName, table);
-          break;
+          return await XmDbTreeCURD.handleCreateTreeNode(req, data, dbName, table,XmRouter);
         case "edit":
-          return await XmRouter.handleUpdateTreeNode(req, data, dbName, table);
+          return await XmDbTreeCURD.handleUpdateTreeNode(req, data, dbName, table,XmRouter);
         case "delete":
-          return await XmRouter.handleDeleteTreeNode(req, data, dbName, table);
+          return await XmDbTreeCURD.handleDeleteTreeNode(req, data, dbName, table,XmRouter);
         default:
           return XmRouter.gzipResponse(
             { code: 400, msg: `Invalid action: ${action}` },
@@ -159,153 +158,6 @@ export class XmRouter {
         {
           code: 500,
           msg: `Failed to fetch trees in ${dbName}: ${error.message}`,
-        },
-        500
-      );
-    }
-  }
-
-  static async handleCreateTreeNode(req, data, dbName, treeTable) {
-    try {
-      if (!data.name || typeof data.name !== "string") {
-        return XmRouter.gzipResponse(
-          { code: 400, msg: "Name is required and must be a string" },
-          400
-        );
-      }
-      const { pid = 0, name } = data;
-      const treeNode = await XmDbTreeCURD.createTreeNode(
-        pid,
-        name,
-        dbName,
-        treeTable
-      );
-      return XmRouter.gzipResponse(
-        {
-          code: 0,
-          msg: "Node created successfully",
-          data: {
-            id: treeNode.id,
-            pid: treeNode.pid,
-            name: treeNode.name,
-            key: treeNode.key,
-          },
-        },
-        201
-      );
-    } catch (error) {
-      if (process.env.NODE_ENV !== "production") {
-        console.error(
-          `[XmRouter] handleCreateTreeNode error for ${dbName}:`,
-          error
-        );
-      }
-      const code =
-        error.message.includes("Unique constraint violation") ||
-        error.message.includes("Invalid")
-          ? 400
-          : 500;
-      return XmRouter.gzipResponse(
-        {
-          code,
-          msg: `Failed to create tree node in ${dbName}: ${error.message}`,
-        },
-        code
-      );
-    }
-  }
-
-  static async handleUpdateTreeNode(req, data, dbName, treeTable) {
-    try {
-      const id = data.id;
-      if (!id || !/^\d+$/.test(id)) {
-        return XmRouter.gzipResponse(
-          { code: 400, msg: "Invalid tree node ID" },
-          400
-        );
-      }
-      const updates = {};
-      if (data.name !== undefined) updates.name = data.name;
-      if (data.pid !== undefined) updates.pid = data.pid;
-
-      const updated = await XmDbTreeCURD.updateTreeNode(
-        id,
-        updates,
-        dbName,
-        treeTable
-      );
-      if (!updated) {
-        return XmRouter.gzipResponse(
-          { code: 404, msg: `Tree node not found in ${dbName}` },
-          404
-        );
-      }
-      return XmRouter.gzipResponse(
-        {
-          code: 0,
-          msg: "Node updated successfully",
-          data: {
-            id: updated.id,
-            pid: updated.pid,
-            name: updated.name,
-            key: updated.key,
-          },
-        },
-        200
-      );
-    } catch (error) {
-      if (process.env.NODE_ENV !== "production") {
-        console.error(
-          `[XmRouter] handleUpdateTreeNode error for ${dbName}:`,
-          error
-        );
-      }
-      return XmRouter.gzipResponse(
-        {
-          code: 500,
-          msg: `Failed to update tree node in ${dbName}: ${error.message}`,
-        },
-        500
-      );
-    }
-  }
-
-  static async handleDeleteTreeNode(req, data, dbName, treeTable) {
-    try {
-      const id = data.id;
-      if (!id || !/^\d+$/.test(id)) {
-        return XmRouter.gzipResponse(
-          { code: 400, msg: "Invalid tree node ID" },
-          400
-        );
-      }
-      const result = await XmDbTreeCURD.deleteTreeNode(
-        id,
-        true,
-        dbName,
-        treeTable
-      );
-      if (!result) {
-        return XmRouter.gzipResponse(
-          { code: 404, msg: `Tree node not found in ${dbName}` },
-          404
-        );
-      }
-      return XmRouter.gzipResponse(
-        { code: 0, msg: "Node deleted successfully" },
-        200
-      );
-    } catch (error) {
-      if (process.env.NODE_ENV !== "production") {
-        console.error(
-          `[XmRouter] handleDeleteTreeNode error for ${dbName}:`,
-          error
-        );
-      }
-      return XmRouter.gzipResponse(
-        {
-          code: 500,
-          msg: `Failed to delete tree node in ${dbName}: ${error.message}`,
         },
         500
       );
