@@ -20,8 +20,6 @@ export default {
       }
     }
 
- 
-
     fetchB2();
     const meeting = ref({
       name: "示例会议",
@@ -35,6 +33,7 @@ export default {
   template: `
       <div class="p-4">
       <RouterLink to="/pages/hello">Go to Hello</RouterLink>
+      <RouterLink to="/pagesv3/formCreate">Go to FormCreate</RouterLink>
         <h1>{{ message }}</h1>
                <XmCount  />
         <p v-if="b2Data">B2 Message: {{ b2Data.message }}</p>
