@@ -1,6 +1,6 @@
 // server.js
-import { XmRouter } from "./XmRouter.js"; // 导入路由模块
-import XmDbCRUDInit from "./XmDbCRUIDInit.js";
+import { XmRouter } from "../routes/XmRouter.js"; // 导入路由模块
+import XmDbCRUDInit from "../db/XmDbCRUIDInit.js";
 // Hook process events to close databases on exit
 process.on("SIGINT", () => {
   XmDbCRUDInit.closeAll();

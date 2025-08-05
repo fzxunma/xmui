@@ -8,7 +8,7 @@ import {
   sep,
 } from "path";
 import { stat } from "fs/promises";
-import { XmProject } from "./XmProject.js";
+import { XmProject } from "../project/XmProject.js";
 import { XmCacheFs } from "./XmCacheFs.js";
 
 export class XmStaticFs {

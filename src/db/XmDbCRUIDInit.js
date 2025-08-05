@@ -1,12 +1,30 @@
 import { XmDbCRUD, XmDb } from "./XmDbCRUD";
 import { Database } from "bun:sqlite";
+import { mkdirSync, existsSync } from "fs";
+import { dirname, resolve } from "path";
 
 export default class XmDbCRUDInit {
   static async init() {
+    await XmDbCRUDInit.initPath("init");
     const dbNames = await XmDbCRUDInit.dbInit();
     await XmDbCRUDInit.dataInit(dbNames);
   }
+  static async initPath(dbName) {
+    try {
+      const dbPath = `xmdb/${dbName}.db`;
+      const absolutePath = resolve(dbPath);
+      const dbDir = dirname(absolutePath);
 
+      // 确保目录存在
+      if (!existsSync(dbDir)) {
+        mkdirSync(dbDir, { recursive: true });
+        console.log(`Created directory: ${dbDir}`);
+      }
+    } catch (error) {
+      console.error("Failed to initialize database:", error);
+      throw error;
+    }
+  }
   static closeAll() {
     for (const [dbName, db] of XmDb.dbs) {
       try {
@@ -29,7 +47,10 @@ export default class XmDbCRUDInit {
     const result = [];
     for (const dbName of dbNames) {
       if (!XmDb.dbs.has(dbName)) {
-        XmDb.dbs.set(dbName, new Database(`${dbName}.db`, { create: true }));
+        XmDb.dbs.set(
+          dbName,
+          new Database(`xmdb/${dbName}.db`, { create: true })
+        );
         XmDb.log(`Initialized database: ${dbName}`);
       }
       const db = XmDb.dbs.get(dbName);

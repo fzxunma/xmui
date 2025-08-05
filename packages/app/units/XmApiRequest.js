@@ -1,12 +1,13 @@
-export default async function XmApiRequest(
-  action,
-  data = {},
-  table = "tree"
-) {
+function base64Encode(str) {
+  const utf8Bytes = new TextEncoder().encode(str);
+  const binary = String.fromCharCode(...utf8Bytes);
+  return btoa(binary);
+}
+export default async function XmApiRequest(action, data = {}, table = "tree") {
   const payload = { action, data, table };
   const jsonStr = JSON.stringify(payload);
   // 浏览器环境下转 Base64：
-  const base64Str = btoa(unescape(encodeURIComponent(jsonStr)));
+  const base64Str = base64Encode(jsonStr);
 
   const response = await fetch("http://localhost:3000/api/tree", {
     method: "POST",

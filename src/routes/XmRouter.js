@@ -1,9 +1,9 @@
 import { FileSystemRouter } from "bun";
 import { watch } from "fs/promises";
-import { XmProject } from "./XmProject.js";
-import XmDbTreeCURD from "./XmDbCRUDTree.js";
-import XmDbListCURD from "./XmDbCRUDList.js";
-import { XmStaticFs } from "./XmStaticFs.js";
+import { XmProject } from "../project/XmProject.js";
+import XmDbTreeCURD from "../db/XmDbCRUDTree.js";
+import XmDbListCURD from "../db/XmDbCRUDList.js";
+import { XmStaticFs } from "../fs/XmStaticFs.js";
 
 export class XmRouter {
   static router = new FileSystemRouter({
@@ -83,11 +83,15 @@ export class XmRouter {
       );
     }
   }
-
+  static base64Decode(base64Str) {
+    const binary = atob(base64Str);
+    const bytes = new Uint8Array([...binary].map((char) => char.charCodeAt(0)));
+    return new TextDecoder().decode(bytes);
+  }
   static async handleTreeActions(req, dbName) {
     try {
       const base64Str = await req.text();
-      const jsonStr = Buffer.from(base64Str, "base64").toString("utf-8");
+      const jsonStr = this.base64Decode(base64Str);
       let payload;
       try {
         payload = JSON.parse(jsonStr);
@@ -105,11 +109,29 @@ export class XmRouter {
         case "list":
           return await XmRouter.handleList(req, data, dbName, table);
         case "add":
-          return await XmDbTreeCURD.handleCreateTreeNode(req, data, dbName, table,XmRouter);
+          return await XmDbTreeCURD.handleCreateTreeNode(
+            req,
+            data,
+            dbName,
+            table,
+            XmRouter
+          );
         case "edit":
-          return await XmDbTreeCURD.handleUpdateTreeNode(req, data, dbName, table,XmRouter);
+          return await XmDbTreeCURD.handleUpdateTreeNode(
+            req,
+            data,
+            dbName,
+            table,
+            XmRouter
+          );
         case "delete":
-          return await XmDbTreeCURD.handleDeleteTreeNode(req, data, dbName, table,XmRouter);
+          return await XmDbTreeCURD.handleDeleteTreeNode(
+            req,
+            data,
+            dbName,
+            table,
+            XmRouter
+          );
         default:
           return XmRouter.gzipResponse(
             { code: 400, msg: `Invalid action: ${action}` },

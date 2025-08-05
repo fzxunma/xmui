@@ -72,5 +72,4 @@ obj/
 test-results/
 
 package-lock.json
-xm*.db
-xm*.db*
+xmdb/

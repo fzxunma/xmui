@@ -2,7 +2,7 @@ import {
   parse,
   compileTemplate,
   compileScript,
-} from "./vendor/compiler-sfc.esm-browser.js";
+} from "../vendor/compiler-sfc.esm-browser.js";
 import { resolve } from "path";
 
 export class XmCacheFs {
