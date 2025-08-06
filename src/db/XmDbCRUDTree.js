@@ -155,10 +155,13 @@ export default class XmDbTreeCURD {
         const children = childrenRows
           .map((n) => build(n.id, currentDepth + 1))
           .filter(Boolean);
-        return {
-          ...node,
-          children,
-        };
+          let result = {
+          ...node
+        }
+        if (children.length > 0){
+          result.children = children
+        }
+        return result;
       };
 
       if (root_id !== 0) {

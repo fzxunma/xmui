@@ -1,5 +1,4 @@
 import XmDb from "./XmDb";
-import { Database } from "bun:sqlite";
 
 export class XmDbCRUD {
   // 获取客户端IP的辅助方法

@@ -2,7 +2,7 @@ import { createApp } from "vue";
 import XmRounterPage from "./pages/rounter";
 import router from "./router/index.js";
 import naive from "naive-ui";
-
+import umodoc from "umodoc";
 class XmAppWeb {
   static async loadApp() {
     const App = createApp(XmRounterPage);
@@ -12,6 +12,8 @@ class XmAppWeb {
         App.component(component.name, component);
       }
     }
+
+    App.use(umodoc.useUmoEditor,{});
     App.use(naive);
     App.use(router);
     App.mount("#app");

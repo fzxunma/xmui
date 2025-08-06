@@ -223,7 +223,7 @@ export default {
       openTreeEdit,
       handleTreeSelect,
       handleTableSelect,
-      handleTabChange,
+      handleTabChange
     };
   }
 }
@@ -232,7 +232,6 @@ export default {
 <template>
 
   <div class="h-full mx-auto bg-white shadow-lg rounded-lg overflow-hidden">
-
     <n-spin size="small" :show="loading" :delay="1000">
       <h1 class="text-2xl font-bold mb-4 text-center text-blue-600">Tree Management</h1>
     </n-spin>
@@ -281,8 +280,8 @@ export default {
           <n-input v-model:value="currentTreeNode.data" placeholder="Enter value" />
         </n-form-item>
         <n-form-item label="Parent" v-if="isTreeEdit">
-          <n-tree-select v-model:value="currentTreeNode.pid" :options="flatTreeNodes" placeholder="Select parent"
-            value-field="id" label-field="name" key-field="id" clearable />
+          <n-tree-select v-model:value="currentTreeNode.pid" :options="treeData" placeholder="Select parent"
+            default-expand-all value-field="id" label-field="name" key-field="id" clearable />
         </n-form-item>
         <n-form-item label="Parent" v-else>
           <n-input

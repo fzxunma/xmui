@@ -37,6 +37,7 @@
   "dependencies": {
     "@form-create/designer": "^3",
     "@form-create/element-ui": "^3",
+    "@umoteam/editor": "^7.0.1",
     "element-plus": "^2.10.5",
     "esbuild": "^0.25.8",
     "naive-ui": "^2.42.0",
