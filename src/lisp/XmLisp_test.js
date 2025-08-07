@@ -1,6 +1,9 @@
-// XmLisp.test.js
-import { test, expect } from "bun:test";
-import { XmLisp } from "./XmLisp.js";
+import { test, expect, beforeEach } from "bun:test";
+import { XmLisp, LispError } from "./XmLisp.js";
+
+beforeEach(() => {
+  XmLisp.global = XmLisp.createGlobalEnv();
+});
 
 test("basic arithmetic", () => {
   expect(XmLisp.run("(+ 1 2)")).toBe(3);
@@ -14,7 +17,7 @@ test("conditional if", () => {
   expect(XmLisp.run("(if (< 3 2) 1 0)")).toBe(0);
 });
 
-test("define variable", () => {
+test("define and variable", () => {
   XmLisp.run("(define x 42)");
   expect(XmLisp.run("x")).toBe(42);
 });
@@ -29,67 +32,61 @@ test("list operations", () => {
   expect(XmLisp.run("(cdr (list 1 2 3))")).toEqual([2, 3]);
   expect(XmLisp.run("(cons 0 (list 1 2))")).toEqual([0, 1, 2]);
 });
-test("begin should evaluate multiple expressions in order", () => {
-  const result = XmLisp.run(`(begin 
-    (define x 1)
-    (define y 2)
-    (+ x y)
-  )`);
-  expect(result).toBe(3);
+
+test("begin executes expressions in order", () => {
+  expect(XmLisp.run(`(begin (define x 1) (define y 2) (+ x y))`)).toBe(3);
 });
 
-test("while loop with counter", () => {
+test("while loop", () => {
   const env = XmLisp.createGlobalEnv();
   XmLisp.eval(XmLisp.parse(XmLisp.tokenize(`(define count 0)`)), env);
   XmLisp.eval(
     XmLisp.parse(
-      XmLisp.tokenize(`
-    (while (< count 5) 
-      (begin 
-        (define count (+ count 1))
-      )
-    )
-  `)
+      XmLisp.tokenize(`(while (< count 5) (begin (define count (+ count 1))))`)
     ),
     env
   );
   expect(XmLisp.eval("count", env)).toBe(5);
 });
 
-test("independent environments (module or REPL)", () => {
-  const env1 = XmLisp.createGlobalEnv();
-  XmLisp.eval(XmLisp.parse(XmLisp.tokenize(`(define x 10)`)), env1);
-  expect(XmLisp.eval("x", env1)).toBe(10);
-
-  const env2 = XmLisp.createGlobalEnv();
-  expect(() => XmLisp.eval("x", env2)).toThrow("Undefined symbol: x");
-});
-test("XmLisp 数学运算", () => {
-  expect(XmLisp.run("(+ 1 2)")).toBe(3);
-  expect(XmLisp.run("(* 2 5)")).toBe(10);
+test("cond expression", () => {
+  expect(
+    XmLisp.run(`(cond
+      ((> 2 3) 100)
+      ((< 2 3) 200)
+      (true 300)
+    )`)
+  ).toBe(200);
 });
 
-test("XmLisp 变量定义", () => {
+test("let binding", () => {
+  expect(XmLisp.run(`(let ((x 5) (y 10)) (+ x y))`)).toBe(15);
+});
+
+test("set! updates variables", () => {
   const env = XmLisp.createGlobalEnv();
-  XmLisp.run("(define x 8)", env);
-  expect(XmLisp.run("(+ x 2)", env)).toBe(10);
+  XmLisp.eval(XmLisp.parse(XmLisp.tokenize(`(define a 1)`)), env);
+  XmLisp.eval(XmLisp.parse(XmLisp.tokenize(`(set! a 5)`)), env);
+  expect(XmLisp.eval("a", env)).toBe(5);
 });
 
-test("XmLisp 条件语句 if", () => {
-  expect(XmLisp.run("(if (> 5 2) 100 200)")).toBe(100);
-});
-
-test("XmLisp lambda 函数", () => {
-  expect(XmLisp.run("((lambda (x) (+ x 1)) 5)")).toBe(6);
-});
-
-test("XmLisp while 循环", () => {
+test("set! error if undefined variable", () => {
   const env = XmLisp.createGlobalEnv();
-  XmLisp.run("(define x 0)", env);
-  XmLisp.run(`(while (< x 5) (define x (+ x 1)))`, env);
-  expect(env.x).toBe(5);
+  expect(() =>
+    XmLisp.eval(XmLisp.parse(XmLisp.tokenize(`(set! b 5)`)), env)
+  ).toThrow(LispError);
 });
 
-test("XmLisp begin 顺序执行", () => {
-  expect(XmLisp.run(`(begin (define x 1) (define y 2) (+ x y))`)).toBe(3);
+test("throws on undefined symbol", () => {
+  expect(() => XmLisp.run("unknownVar")).toThrow(LispError);
+});
+
+test("fromJsAst converts correctly", () => {
+  const jsAst = {
+    type: "BinaryExpression",
+    operator: "+",
+    left: { type: "Literal", value: 1 },
+    right: { type: "Literal", value: 2 },
+  };
+  expect(XmLisp.fromJsAst(jsAst)).toEqual(["+", 1, 2]);
 });
