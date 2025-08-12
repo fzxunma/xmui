@@ -9,7 +9,7 @@ export default async function XmApiRequest(action, data = {}, table = "tree") {
   // 浏览器环境下转 Base64：
   const base64Str = base64Encode(jsonStr);
 
-  const response = await fetch("http://localhost:3000/api/tree", {
+  const response = await fetch("/api/tree", {
     method: "POST",
     headers: { "Content-Type": "text/plain" }, // 因为不是 JSON 了，改成纯文本
     body: base64Str,

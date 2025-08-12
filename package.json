@@ -37,11 +37,14 @@
   "dependencies": {
     "@form-create/designer": "^3",
     "@form-create/element-ui": "^3",
+    "@ricons/tabler": "^0.13.0",
     "@umoteam/editor": "^7.0.1",
+    "@vicons/tabler": "^0.13.0",
     "element-plus": "^2.10.5",
     "esbuild": "^0.25.8",
     "naive-ui": "^2.42.0",
     "vant": "^4.9.21",
-    "vue": "^3.5.17"
+    "vue": "^3.5.17",
+    "vue-draggable-plus": "^0.6.0"
   }
 }

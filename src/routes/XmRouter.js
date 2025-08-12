@@ -11,7 +11,11 @@ export class XmRouter {
     dir: XmProject.serverPath,
     fileExtensions: [".ts", ".js"],
   });
-
+  static corsHeaders = {
+    "Access-Control-Allow-Origin": "*", // 或者指定具体域名
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  };
   static gzipResponse(obj, status = 200, headers = {}) {
     const jsonStr = JSON.stringify(obj);
     const encoded = new TextEncoder().encode(jsonStr);
@@ -23,6 +27,7 @@ export class XmRouter {
         "Content-Encoding": "gzip",
         "Content-Length": gzipped.byteLength.toString(),
         Vary: "Accept-Encoding",
+        ...XmRouter.corsHeaders,
         ...headers,
       },
     });
@@ -124,7 +129,16 @@ export class XmRouter {
             table,
             XmRouter
           );
-        case "delete":
+        case "upsert":
+          console.log(data)
+          return await XmDbTreeCURD.handleUpsertTreeNode(
+            req,
+            data,
+            dbName,
+            table,
+            XmRouter
+          );
+          case "delete":
           return await XmDbTreeCURD.handleDeleteTreeNode(
             req,
             data,

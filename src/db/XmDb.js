@@ -9,7 +9,7 @@ export default class XmDb {
     console[level](`[XmDb] ${message}`);
   }
 
-  static knownTypes = ["tree", "list", "log"];
+  static knownTypes = ["tree", "list", "log","orders"];
   static baseFields = `
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     pid INTEGER DEFAULT 0,
@@ -25,6 +25,7 @@ export default class XmDb {
     tree: XmDb.baseFields,
     list: XmDb.baseFields,
     log: XmDb.baseFields,
+    orders: XmDb.baseFields
   };
 
   static async ensureTable(type, dbName = "xm1") {
@@ -61,6 +62,7 @@ export default class XmDb {
       for (const row of rows) {
         XmDb.idCache.set(`${cacheKey}:${row.id}`, row);
         XmDb.keyCache.set(`${cacheKey}:${row.name}_${row.pid}`, row);
+          console.log(`${cacheKey}:${row.name}_${row.pid}`)
         if (!pidMap.has(row.pid)) {
           pidMap.set(row.pid, []);
         }

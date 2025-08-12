@@ -43,7 +43,61 @@ export default class XmDbTreeCURD {
       }
       const code =
         error.message.includes("Unique constraint violation") ||
-        error.message.includes("Invalid")
+          error.message.includes("Invalid")
+          ? 400
+          : 500;
+      return XmRouter.gzipResponse(
+        {
+          code,
+          msg: `Failed to create tree node in ${dbName}: ${error.message}`,
+        },
+        code
+      );
+    }
+  }
+  static async handleUpsertTreeNode(req, data, dbName, treeTable, XmRouter) {
+    try {
+      if (!data.name || typeof data.name !== "string") {
+        return XmRouter.gzipResponse(
+          { code: 400, msg: "Name is required and must be a string" },
+          400
+        );
+      }
+      const { pid = 0, name } = data;
+      const treeNode = await XmDbCRUD.upsert({
+        type: treeTable,
+        pid: pid ? pid : 0,
+        name,
+        uniqueFields: [],
+        uniqueValues: [],
+        dbName,
+        data: data.data,
+        req,
+        userId: 0,
+      });
+      return XmRouter.gzipResponse(
+        {
+          code: 0,
+          msg: "Node created successfully",
+          data: {
+            id: treeNode.id,
+            pid: treeNode.pid,
+            name: treeNode.name,
+            key: treeNode.key,
+          },
+        },
+        201
+      );
+    } catch (error) {
+      if (process.env.NODE_ENV !== "production") {
+        console.error(
+          `[XmRouter] handleCreateTreeNode error for ${dbName}:`,
+          error
+        );
+      }
+      const code =
+        error.message.includes("Unique constraint violation") ||
+          error.message.includes("Invalid")
           ? 400
           : 500;
       return XmRouter.gzipResponse(
@@ -137,9 +191,15 @@ export default class XmDbTreeCURD {
     try {
       await XmDb.ensureTable(treeTable, dbName);
       const cacheKeyTree = `${dbName}:${treeTable}`;
+      const ordersKeyTree = `${dbName}:orders:orders`;
 
       const build = (id, currentDepth = 1) => {
         const node = XmDb.idCache.get(`${cacheKeyTree}:${id}`);
+        const orderRecord = XmDb.keyCache.get(`${ordersKeyTree}_${id}`);
+        if (orderRecord && orderRecord.data) {
+          node.order = XmDbCRUD.parseData(orderRecord.data);
+        }
+
         if (!node) {
           XmDb.log(`Node ${id} not found in ${dbName}`, "warn");
           return null;
@@ -151,15 +211,24 @@ export default class XmDbTreeCURD {
           };
         }
         let childrenRows = XmDb.pidCache.get(`${cacheKeyTree}:${id}`) || [];
-        childrenRows = childrenRows.slice((page - 1) * limit, page * limit);
-        const children = childrenRows
-          .map((n) => build(n.id, currentDepth + 1))
-          .filter(Boolean);
-          let result = {
-          ...node
+
+        // 子节点排序
+        if (node.order && Array.isArray(node.order)) {
+          const orderMap = new Map(node.order.map((cid, idx) => [cid, idx]));
+          childrenRows.sort(
+            (a, b) => (orderMap.get(a.id) ?? Infinity) - (orderMap.get(b.id) ?? Infinity)
+          );
         }
-        if (children.length > 0){
-          result.children = children
+
+        // 子节点分页
+        childrenRows = childrenRows.slice((page - 1) * limit, page * limit);
+
+        // 递归构建子树
+        const children = childrenRows.map((n) => build(n.id, currentDepth + 1)).filter(Boolean);
+
+        const result = { ...node };
+        if (children.length > 0) {
+          result.children = children;
         }
         return result;
       };
@@ -168,12 +237,31 @@ export default class XmDbTreeCURD {
         const tree = build(root_id);
         return tree ? [tree] : [];
       } else {
+        // 根节点为 pid=0 的所有节点
         let rootNodes = XmDb.pidCache.get(`${cacheKeyTree}:0`) || [];
+
+        // 根节点排序依据
+        const rootOrderRecord = XmDb.keyCache.get(`${ordersKeyTree}_0`);
+        let rootOrder = null;
+        if (rootOrderRecord && rootOrderRecord.data) {
+          rootOrder = XmDbCRUD.parseData(rootOrderRecord.data);
+        }
+
+        if (rootOrder && Array.isArray(rootOrder)) {
+          const orderMap = new Map(rootOrder.map((cid, idx) => [cid, idx]));
+          rootNodes.sort(
+            (a, b) => (orderMap.get(a.id) ?? Infinity) - (orderMap.get(b.id) ?? Infinity)
+          );
+        }
+
+        // 根节点分页
         rootNodes = rootNodes.slice((page - 1) * limit, page * limit);
+
         if (!rootNodes.length) {
           XmDb.log(`No root nodes found for ${dbName}`, "warn");
           return [];
         }
+
         return rootNodes.map((root) => build(root.id)).filter(Boolean);
       }
     } catch (error) {
@@ -196,7 +284,6 @@ export default class XmDbTreeCURD {
       if (data.pid !== undefined) updates.pid = data.pid;
       if (data.version !== undefined) updates.version = data.version;
       if (data.data !== undefined) updates.data = data.data;
-      console.log(updates,data)
       const updated = await XmDbCRUD.update({
         type: treeTable,
         id,

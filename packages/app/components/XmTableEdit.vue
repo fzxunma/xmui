@@ -1,13 +1,13 @@
 <template>
     <div class="flex gap-2">
         <n-button size="small" type="primary" @click="onOpenTreeEdit(row)">
-            Edit
+            修改
         </n-button>
 
         <n-popconfirm @positive-click="() => onHandleTreeDelete(row)">
             <template #trigger>
                 <n-button size="small" type="error">
-                    Delete
+                    删除
                 </n-button>
             </template>
             Are you sure to delete this node and its children?

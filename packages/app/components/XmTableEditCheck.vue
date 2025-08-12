@@ -1,17 +1,17 @@
 <template>
     <div class="flex gap-2 items-center">
         <n-button size="small" type="primary" @click="onOpenTreeEdit(row)">
-            Edit
+            编辑
         </n-button>
         <n-popconfirm v-model:show="showPopconfirm" @positive-click="confirmDelete">
             <template #trigger>
                 <n-button size="small" type="error" @click="showPopconfirm = true">
-                    Delete
+                    删除
                 </n-button>
             </template>
             <div>
-                <p>Please input <strong>{{ row.name }}</strong> to confirm deletion</p>
-                <n-input v-model:value="inputName" placeholder="Enter name to confirm" />
+                <p>请输入 “<strong>{{ row.name }}</strong>” 确认删除</p>
+                <n-input v-model:value="inputName" :placeholder=" row.name " />
             </div>
         </n-popconfirm>
     </div>

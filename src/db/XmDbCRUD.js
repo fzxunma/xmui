@@ -306,7 +306,7 @@ export class XmDbCRUD {
 
       // 处理 name 和 pid 更新
       const newName = updates.name !== undefined ? updates.name : existing.name;
-      const newPid = updates.pid !== undefined ? updates.pid : existing.pid;
+      const newPid = updates.pid !== undefined ? (updates.pid === null ? 0 : updates.pid) : existing.pid;
       const compositeKey = `${newName}_${newPid}`;
       const oldCompositeKey = `${existing.name}_${existing.pid}`;
 
@@ -407,10 +407,10 @@ export class XmDbCRUD {
         req: req,
       });
 
-      if (compositeKey !== oldCompositeKey) {
+      //if (compositeKey !== oldCompositeKey) {
         XmDb.keyCache.delete(`${cacheKey}:${oldCompositeKey}`);
         XmDb.keyCache.set(`${cacheKey}:${compositeKey}`, updatedData);
-      }
+      //}
 
       if (existing.pid !== newPid) {
         // Remove from all pidCache entries where this id appears
@@ -713,6 +713,58 @@ export class XmDbCRUD {
       return stmt.all(...params);
     } catch (error) {
       XmDb.log(`Failed to fetch logs: ${error.message}`, "error");
+      throw error;
+    }
+  }
+  static async upsert({
+    type,
+    name,
+    pid = 0,
+    data = {},
+    dbName = "xm1",
+    expectedVersion = null,
+    req = null,
+    userId = null,
+  }) {
+    try {
+      const compositeKey = `${name}_${pid}`;
+      let existing = await this.readByName({
+        type,
+        compositeKey,
+        dbName,
+        req,
+        userId,
+      });
+      if (existing) {
+        const updates = {};
+        updates.name = name;
+        updates.pid = pid;
+        updates.version = existing.version;
+        updates.data = data;
+        return await this.update({
+          type,
+          id: existing.id,
+          updates,
+          dbName,
+          expectedVersion: existing.version,
+          req,
+          userId,
+        });
+      } else {
+        // 不存在，执行创建
+        return await this.create({
+          type,
+          pid: pid ?? 0,
+          name: name ?? "",
+          uniqueFields: data.uniqueFields || [],
+          uniqueValues: data.uniqueValues || [],
+          dbName,
+          data: data || null,
+          req,
+          userId,
+        });
+      }
+    } catch (error) {
       throw error;
     }
   }
