@@ -5,6 +5,8 @@ const { useMessage, NButton, NPopconfirm, NIcon, NModal, NForm, NFormItem, NInpu
 import XmTableEdit from "../components/XmTableEditCheck.vue";
 import XmTableDragDropIcon from "../components/XmTableDragDropIcon.vue";
 import XmApiRequest from "../units/XmApiRequest.js";
+import umoOption from "../units/umoOption.js";
+import testData from "../units/test.js";
 import { useDraggable } from 'vue-draggable-plus'
 
 
@@ -15,6 +17,7 @@ export default {
   },
   setup() {
     const tableRef = ref(null)
+    const editorRef = ref(null);
     const message = useMessage();
     const treeData = ref([]);
     const listData = ref([]);
@@ -25,7 +28,7 @@ export default {
     const currentTreeNode = ref({ id: null, pid: null, name: '', key: '' });
     const selectedKeys = ref([]);
     const errorMessage = ref('');
-    const table = ref('tree');
+    const table = ref('page');
 
     const filteredTreeNodes = computed(() => {
       if (!listData.value || !Array.isArray(listData.value)) {
@@ -117,6 +120,9 @@ export default {
       }
     };
     const fetchListData = async () => {
+      if (table.value === 'page') {
+        return
+      }
       loading.value = true;
       errorMessage.value = '';
       try {
@@ -133,6 +139,7 @@ export default {
       } finally {
         loading.value = false;
       }
+      initDraggable();
     };
     const handleTreeSave = async () => {
       errorMessage.value = '';
@@ -203,10 +210,11 @@ export default {
     const handleTreeSelect = async (keys) => {
       if (keys.length > 0) {
         selectedKeys.value = keys;
-        loadData()
+        await loadData()
       } else {
 
       }
+      initDraggable();
     };
 
     const handleTableSelect = (keys) => {
@@ -215,12 +223,13 @@ export default {
 
     const handleTabChange = async (value) => {
       table.value = value;
+      editorRef.value.setContent(testData)
+      //console.log(table.value, value, editorRef.value.getJSON())
       await fetchListData()
     }
     const loadData = async () => {
       await fetchAllData();
       await fetchListData();
-      initDraggable();
     }
     loadData();
     let draggable = null;
@@ -252,7 +261,9 @@ export default {
         },
       });
     };
-
+    const adjustHeight = () => {
+      return window.innerHeight - 150;
+    }
     onMounted(() => {
       initDraggable();
     });
@@ -275,7 +286,11 @@ export default {
       openTreeEdit,
       handleTreeSelect,
       handleTableSelect,
-      handleTabChange
+      handleTabChange,
+      table,
+      umoOption,
+      editorRef,
+      adjustHeight
     };
   }
 }
@@ -296,25 +311,34 @@ export default {
         </p>
       </div>
       <!-- Tree Nodes and List Items Table (Right) -->
-      <div class="flex-1 overflow-y-auto p-2.5 border border-gray-200">
+      <div class="flex-1 h-full overflow-hidden p-2.5 border border-gray-200">
         <n-tabs type="line" animated v-model:value="table" @update:value="handleTabChange">
+          <n-tab name="page" tab="页面">
+          </n-tab>
           <n-tab name="tree" tab="数据">
           </n-tab>
-          <n-tab name="list" tab="格式">
-          </n-tab>
+          <!-- <n-tab name="list" tab="格式">
+          </n-tab> -->
         </n-tabs>
-        <div class="my-1">
-          <n-button type="success" class="p-4 bg-green-500 hover:bg-green-600 text-white font-semibold rounded"
-            @click="openTreeAdd">
-            添加
-          </n-button>
+        <div v-show="table == 'page'" class="h-full min-h-0 overflow-y-auto">
+          <umo-editor v-bind="umoOption" ref="editorRef"></umo-editor>
         </div>
-        <n-data-table :columns="treeColumns" :data="filteredTreeNodes || []" :bordered="true" :row-key="(row) => row.id"
-          :single-line="false" :key="filteredTreeNodes?.length" @update:checked-row-keys="handleTableSelect"
-          class="min-h-[300px]" style="max-height: calc(100vh - 80px);" striped />
-        <p v-if="filteredTreeNodes && !filteredTreeNodes.length" class="text-gray-500 mt-2">
-          {{ selectedKeys.length ? 'No child nodes for selected node.' : 'No nodes available.' }}
-        </p>
+        <div v-show="table !== 'page'" class=" h-full min-h-0">
+          <div class="my-1">
+            <n-button type="success" class="p-4 bg-green-500 hover:bg-green-600 text-white font-semibold rounded"
+              @click="openTreeAdd">
+              添加
+            </n-button>
+          </div>
+          <div class="h-full min-h-0 overflow-y-auto">
+            <n-data-table :columns="treeColumns" :data="filteredTreeNodes || []" :bordered="true"
+              :row-key="(row) => row.id" :single-line="false" :key="filteredTreeNodes?.length"
+              @update:checked-row-keys="handleTableSelect" :max-height="adjustHeight()" striped />
+            <p v-if="filteredTreeNodes && !filteredTreeNodes.length" class="text-gray-500 mt-2">
+              {{ selectedKeys.length ? 'No child nodes for selected node.' : 'No nodes available.' }}
+            </p>
+          </div>
+        </div>
       </div>
 
       <n-modal v-model:show="showTreeModal" preset="card" :title="isTreeEdit ? '编辑' : '添加'" style="width:400px">

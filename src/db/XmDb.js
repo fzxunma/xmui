@@ -62,7 +62,6 @@ export default class XmDb {
       for (const row of rows) {
         XmDb.idCache.set(`${cacheKey}:${row.id}`, row);
         XmDb.keyCache.set(`${cacheKey}:${row.name}_${row.pid}`, row);
-          console.log(`${cacheKey}:${row.name}_${row.pid}`)
         if (!pidMap.has(row.pid)) {
           pidMap.set(row.pid, []);
         }

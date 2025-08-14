@@ -204,7 +204,7 @@ export class XmRouter {
     try {
       const pid = data.pid || 0;
       const page = data.page || 1;
-      const limit = data.limit || 10;
+      const limit = data.limit || 100;
       const listItems = await XmDbListCURD.getListItems(
         pid,
         page,
