@@ -9,15 +9,18 @@ export default class XmDbTreeCURD {
           400
         );
       }
-      const { pid = 0, name } = data;
+      const { pid = 0, name, type } = data;
       const treeNode = await XmDbCRUD.create({
-        type: treeTable,
+        tableName: treeTable,
         pid,
         name,
+        type,
         uniqueFields: [],
         uniqueValues: [],
         dbName,
         data: data.data,
+        data_o: data.data_o,
+        data_t: data.data_t,
         req,
         userId: 0,
       });
@@ -30,60 +33,8 @@ export default class XmDbTreeCURD {
             pid: treeNode.pid,
             name: treeNode.name,
             key: treeNode.key,
-          },
-        },
-        201
-      );
-    } catch (error) {
-      if (process.env.NODE_ENV !== "production") {
-        console.error(
-          `[XmRouter] handleCreateTreeNode error for ${dbName}:`,
-          error
-        );
-      }
-      const code =
-        error.message.includes("Unique constraint violation") ||
-          error.message.includes("Invalid")
-          ? 400
-          : 500;
-      return XmRouter.gzipResponse(
-        {
-          code,
-          msg: `Failed to create tree node in ${dbName}: ${error.message}`,
-        },
-        code
-      );
-    }
-  }
-  static async handleUpsertTreeNode(req, data, dbName, treeTable, XmRouter) {
-    try {
-      if (!data.name || typeof data.name !== "string") {
-        return XmRouter.gzipResponse(
-          { code: 400, msg: "Name is required and must be a string" },
-          400
-        );
-      }
-      const { pid = 0, name } = data;
-      const treeNode = await XmDbCRUD.upsert({
-        type: treeTable,
-        pid: pid ? pid : 0,
-        name,
-        uniqueFields: [],
-        uniqueValues: [],
-        dbName,
-        data: data.data,
-        req,
-        userId: 0,
-      });
-      return XmRouter.gzipResponse(
-        {
-          code: 0,
-          msg: "Node created successfully",
-          data: {
-            id: treeNode.id,
-            pid: treeNode.pid,
-            name: treeNode.name,
-            key: treeNode.key,
+            data_o: treeNode.data_o,
+            data_t: treeNode.data_t,
           },
         },
         201
@@ -110,9 +61,69 @@ export default class XmDbTreeCURD {
     }
   }
 
+  static async handleUpsertTreeNode(req, data, dbName, treeTable, XmRouter) {
+    try {
+      if (!data.name || typeof data.name !== "string") {
+        return XmRouter.gzipResponse(
+          { code: 400, msg: "Name is required and must be a string" },
+          400
+        );
+      }
+      const { pid = 0, type,name } = data;
+      const treeNode = await XmDbCRUD.upsert({
+        tableName: treeTable,
+        pid: pid ? pid : 0,
+        name,
+        type,
+        data: {
+          data: data.data,
+          data_o: data.data_o,
+          data_t: data.data_t,
+        },
+        dbName,
+        req,
+        userId: 0,
+      });
+      return XmRouter.gzipResponse(
+        {
+          code: 0,
+          msg: "Node created or updated successfully",
+          data: {
+            id: treeNode.id,
+            pid: treeNode.pid,
+            name: treeNode.name,
+            key: treeNode.key,
+            data_o: treeNode.data_o,
+            data_t: treeNode.data_t,
+          },
+        },
+        201
+      );
+    } catch (error) {
+      if (process.env.NODE_ENV !== "production") {
+        console.error(
+          `[XmRouter] handleUpsertTreeNode error for ${dbName}:`,
+          error
+        );
+      }
+      const code =
+        error.message.includes("Unique constraint violation") ||
+          error.message.includes("Invalid")
+          ? 400
+          : 500;
+      return XmRouter.gzipResponse(
+        {
+          code,
+          msg: `Failed to upsert tree node in ${dbName}: ${error.message}`,
+        },
+        code
+      );
+    }
+  }
+
   static async getTreeNode(id, dbName = "xm1", treeTable = "tree") {
     try {
-      const tree = await XmDbCRUD.read({ type: treeTable, id, dbName });
+      const tree = await XmDbCRUD.read({ tableName: treeTable, id, dbName });
       return { tree };
     } catch (error) {
       XmDb.log(
@@ -133,7 +144,7 @@ export default class XmDbTreeCURD {
         );
       }
       const result = await XmDbCRUD.delete({
-        type: treeTable,
+        tableName: treeTable,
         id,
         soft: true,
         dbName,
@@ -166,6 +177,7 @@ export default class XmDbTreeCURD {
       );
     }
   }
+
   static async getChildren(pid, dbName = "xm1", treeTable = "tree") {
     try {
       await XmDb.ensureTable(treeTable, dbName);
@@ -282,10 +294,13 @@ export default class XmDbTreeCURD {
       const updates = {};
       if (data.name !== undefined) updates.name = data.name;
       if (data.pid !== undefined) updates.pid = data.pid;
+      if (data.type !== undefined) updates.type = data.type;
       if (data.version !== undefined) updates.version = data.version;
       if (data.data !== undefined) updates.data = data.data;
+      if (data.data_o !== undefined) updates.data_o = data.data_o;
+      if (data.data_t !== undefined) updates.data_t = data.data_t;
       const updated = await XmDbCRUD.update({
-        type: treeTable,
+        tableName: treeTable,
         id,
         updates,
         dbName,
@@ -306,8 +321,11 @@ export default class XmDbTreeCURD {
           data: {
             id: updated.id,
             pid: updated.pid,
+            type: updated.type,
             name: updated.name,
             key: updated.key,
+            data_o: updated.data_o,
+            data_t: updated.data_t,
           },
         },
         200

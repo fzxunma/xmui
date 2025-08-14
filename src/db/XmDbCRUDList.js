@@ -73,7 +73,7 @@ export default class XmDbListCURD {
       for (const groupKey in groups) {
         // 创建树节点
         const node = await XmDbCRUD.create({
-          type: "tree",
+          tableName: "tree",
           pid: 0,
           name: groupKey,
           uniqueFields: [],
@@ -84,7 +84,7 @@ export default class XmDbListCURD {
         // 更新列表项的 pid
         for (const item of groups[groupKey]) {
           await XmDbCRUD.update({
-            type: table,
+            tableName: table,
             id: item.id,
             updates: { pid: node.id },
             dbName,

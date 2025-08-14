@@ -9,14 +9,13 @@ import umoOption from "../units/umoOption.js";
 import testData from "../units/test.js";
 import { useDraggable } from 'vue-draggable-plus'
 
-
 export default {
   components: {
     XmTableEdit,
     XmTableDragDropIcon
   },
   setup() {
-    const tableRef = ref(null)
+    const tableRef = ref(null);
     const editorRef = ref(null);
     const message = useMessage();
     const treeData = ref([]);
@@ -25,7 +24,19 @@ export default {
     const showTreeModal = ref(false);
     const isTreeEdit = ref(false);
     const loading = ref(true);
-    const currentTreeNode = ref({ id: null, pid: null, name: '', key: '' });
+    const currentTreeNode = ref({
+      id: null,
+      pid: null,
+      name: '',
+      key: '',
+      type: 'default',
+      data: '',
+      data_o: '',
+      data_t: '',
+      version: 1,
+      version_o: 0,
+      version_t: 0
+    });
     const selectedKeys = ref([]);
     const errorMessage = ref('');
     const table = ref('page');
@@ -36,30 +47,37 @@ export default {
       }
       return listData.value.map(node => ({
         id: node.id,
+        type: node.type,
         pid: node.pid !== null ? node.pid : null,
         name: node.name,
         key: node.key,
         version: node.version,
-        data: node.data
+        version_o: node.version_o,
+        version_t: node.version_t,
+        data: node.data,
+        data_o: node.data_o,
+        data_t: node.data_t,
       }));
     });
 
     const treeColumns = [
       {
-        title: '序号', key: 'id', width: 80,
+        title: '序号',
+        key: 'id',
+        width: 80,
         render: (row) => {
           return h(
             XmTableDragDropIcon,
-            {
-              row
-            },
-            { default: () => h(DragDrop) }
-          )
+            { row },
+            { default: () => h('div', 'Drag') }
+          );
         }
       },
       { title: '名称', key: 'name', width: 150 },
-      { title: '数据', key: 'data' },
-      // { title: 'Key', key: 'key', width: 120 },
+      { title: '类型', key: 'type', width: 120 },
+      { title: '数据', key: 'data', width: 150 },
+      { title: '数据 (O)', key: 'data_o', width: 150 },
+      { title: '数据 (T)', key: 'data_t', width: 150 },
       {
         title: '类别',
         key: 'pid',
@@ -71,17 +89,18 @@ export default {
         }
       },
       { title: '版本', key: 'version', width: 80 },
-
+      { title: '版本 (O)', key: 'version_o', width: 80 },
+      { title: '版本 (T)', key: 'version_t', width: 80 },
       {
         title: '动作',
         key: 'actions',
         render: (row) => h(XmTableEdit, {
           row,
           onOpenTreeEdit: (row) => {
-            openTreeEdit(row)
+            openTreeEdit(row);
           },
           onHandleTreeDelete: (row) => {
-            handleTreeDelete(row)
+            handleTreeDelete(row);
           }
         })
       }
@@ -119,16 +138,17 @@ export default {
         loading.value = false;
       }
     };
+
     const fetchListData = async () => {
       if (table.value === 'page') {
-        return
+        return;
       }
       loading.value = true;
       errorMessage.value = '';
       try {
-        let pid = 0
+        let pid = 0;
         if (selectedKeys.value.length > 0) {
-          pid = selectedKeys.value[0]
+          pid = selectedKeys.value[0];
         }
         const data = await XmApiRequest('list', { pid }, table.value);
         listData.value = data.data?.rows || [];
@@ -141,18 +161,21 @@ export default {
       }
       initDraggable();
     };
+
     const handleTreeSave = async () => {
       errorMessage.value = '';
       const input = {
         name: currentTreeNode.value.name,
         pid: currentTreeNode.value.pid !== null ? currentTreeNode.value.pid : null,
+        type: currentTreeNode.value.type,
         version: currentTreeNode.value.version,
         data: currentTreeNode.value.data,
+        data_o: currentTreeNode.value.data_o,
+        data_t: currentTreeNode.value.data_t,
       };
       try {
         const action = isTreeEdit.value ? 'edit' : 'add';
         if (isTreeEdit.value) input.id = currentTreeNode.value.id;
-        console.log(input)
         const data = await XmApiRequest(action, input, table.value);
         if (data.code !== 0) {
           throw new Error(data.msg || 'Failed to save tree node');
@@ -188,8 +211,13 @@ export default {
         pid: selectedKeys.value.length ? selectedKeys.value[0] : null,
         name: '',
         key: '',
-        version: 1,
+        type: 'default',
         data: '',
+        data_o: '',
+        data_t: '',
+        version: 1,
+        version_o: 0,
+        version_t: 0
       };
       showTreeModal.value = true;
     };
@@ -201,8 +229,13 @@ export default {
         pid: node.pid !== null ? node.pid : null,
         name: node.name,
         key: node.key,
+        type: node.type || 'default',
+        data: node.data || '',
+        data_o: node.data_o || '',
+        data_t: node.data_t || '',
         version: node.version,
-        data: node.data,
+        version_o: node.version_o,
+        version_t: node.version_t
       };
       showTreeModal.value = true;
     };
@@ -210,9 +243,7 @@ export default {
     const handleTreeSelect = async (keys) => {
       if (keys.length > 0) {
         selectedKeys.value = keys;
-        await loadData()
-      } else {
-
+        await loadData();
       }
       initDraggable();
     };
@@ -223,15 +254,16 @@ export default {
 
     const handleTabChange = async (value) => {
       table.value = value;
-      editorRef.value.setContent(testData)
-      //console.log(table.value, value, editorRef.value.getJSON())
-      await fetchListData()
-    }
+      editorRef.value.setContent(testData);
+      await fetchListData();
+    };
+
     const loadData = async () => {
       await fetchAllData();
       await fetchListData();
-    }
+    };
     loadData();
+
     let draggable = null;
 
     const initDraggable = () => {
@@ -239,7 +271,6 @@ export default {
       if (!tbody) return;
 
       if (draggable) {
-        // 如果之前有绑定，先销毁（如果useDraggable支持销毁）
         draggable.destroy?.();
         draggable = null;
       }
@@ -261,9 +292,11 @@ export default {
         },
       });
     };
+
     const adjustHeight = () => {
       return window.innerHeight - 150;
-    }
+    };
+
     onMounted(() => {
       initDraggable();
     });
@@ -297,15 +330,24 @@ export default {
 </script>
 
 <template>
-
   <div class="h-full mx-auto bg-white shadow-lg rounded-lg overflow-hidden">
     <div class="h-full flex gap-1">
       <!-- Tree View (Left) -->
-      <div class="w-64 h-full min-h-0   p-2.5 border border-gray-200">
+      <div class="w-64 h-full min-h-0 p-2.5 border border-gray-200">
         <h2 class="text-xl font-semibold mb-2">编排</h2>
-        <n-tree :data="treeData" style="max-height: calc(100vh - 80px);" key-field="id" label-field="name" show-line
-          expandable block-line virtual-scroll selectable :selected-keys="selectedKeys"
-          @update:selected-keys="handleTreeSelect" />
+        <n-tree
+          :data="treeData"
+          style="max-height: calc(100vh - 80px);"
+          key-field="id"
+          label-field="name"
+          show-line
+          expandable
+          block-line
+          virtual-scroll
+          selectable
+          :selected-keys="selectedKeys"
+          @update:selected-keys="handleTreeSelect"
+        />
         <p v-if="treeData && !treeData.length" class="text-gray-500 mt-2">
           No tree nodes available. Add a node to start.
         </p>
@@ -313,27 +355,34 @@ export default {
       <!-- Tree Nodes and List Items Table (Right) -->
       <div class="flex-1 h-full overflow-hidden p-2.5 border border-gray-200">
         <n-tabs type="line" animated v-model:value="table" @update:value="handleTabChange">
-          <n-tab name="page" tab="页面">
-          </n-tab>
-          <n-tab name="tree" tab="数据">
-          </n-tab>
-          <!-- <n-tab name="list" tab="格式">
-          </n-tab> -->
+          <n-tab name="page" tab="页面"></n-tab>
+          <n-tab name="tree" tab="数据"></n-tab>
         </n-tabs>
         <div v-show="table == 'page'" class="h-full min-h-0 overflow-y-auto">
           <umo-editor v-bind="umoOption" ref="editorRef"></umo-editor>
         </div>
-        <div v-show="table !== 'page'" class=" h-full min-h-0">
+        <div v-show="table !== 'page'" class="h-full min-h-0">
           <div class="my-1">
-            <n-button type="success" class="p-4 bg-green-500 hover:bg-green-600 text-white font-semibold rounded"
-              @click="openTreeAdd">
+            <n-button
+              type="success"
+              class="p-4 bg-green-500 hover:bg-green-600 text-white font-semibold rounded"
+              @click="openTreeAdd"
+            >
               添加
             </n-button>
           </div>
           <div class="h-full min-h-0 overflow-y-auto">
-            <n-data-table :columns="treeColumns" :data="filteredTreeNodes || []" :bordered="true"
-              :row-key="(row) => row.id" :single-line="false" :key="filteredTreeNodes?.length"
-              @update:checked-row-keys="handleTableSelect" :max-height="adjustHeight()" striped />
+            <n-data-table
+              :columns="treeColumns"
+              :data="filteredTreeNodes || []"
+              :bordered="true"
+              :row-key="(row) => row.id"
+              :single-line="false"
+              :key="filteredTreeNodes?.length"
+              @update:checked-row-keys="handleTableSelect"
+              :max-height="adjustHeight()"
+              striped
+            />
             <p v-if="filteredTreeNodes && !filteredTreeNodes.length" class="text-gray-500 mt-2">
               {{ selectedKeys.length ? 'No child nodes for selected node.' : 'No nodes available.' }}
             </p>
@@ -341,25 +390,54 @@ export default {
         </div>
       </div>
 
-      <n-modal v-model:show="showTreeModal" preset="card" :title="isTreeEdit ? '编辑' : '添加'" style="width:400px">
+      <n-modal
+        v-model:show="showTreeModal"
+        preset="card"
+        :title="isTreeEdit ? '编辑' : '添加'"
+        style="width:400px"
+      >
         <n-form>
           <n-form-item label="名称">
             <n-input v-model:value="currentTreeNode.name" placeholder="Enter name" />
           </n-form-item>
+          <n-form-item label="类型">
+            <n-input v-model:value="currentTreeNode.type" placeholder="Enter type" />
+          </n-form-item>
           <n-form-item label="数据">
-            <n-input v-model:value="currentTreeNode.data" placeholder="Enter value" />
+            <n-input v-model:value="currentTreeNode.data" placeholder="Enter data" />
+          </n-form-item>
+          <n-form-item label="数据 (O)">
+            <n-input v-model:value="currentTreeNode.data_o" placeholder="Enter data_o" />
+          </n-form-item>
+          <n-form-item label="数据 (T)">
+            <n-input v-model:value="currentTreeNode.data_t" placeholder="Enter data_t" />
           </n-form-item>
           <n-form-item label="类别" v-if="isTreeEdit">
-            <n-tree-select v-model:value="currentTreeNode.pid" :options="treeData" placeholder="Select parent"
-              default-expand-all value-field="id" label-field="name" key-field="id" clearable />
+            <n-tree-select
+              v-model:value="currentTreeNode.pid"
+              :options="treeData"
+              placeholder="Select parent"
+              default-expand-all
+              value-field="id"
+              label-field="name"
+              key-field="id"
+              clearable
+            />
           </n-form-item>
           <n-form-item label="类别" v-else>
             <n-input
               :value="selectedKeys.length ? flatTreeNodes.find(n => n.value === selectedKeys[0])?.label || 'None' : 'None'"
-              disabled />
+              disabled
+            />
           </n-form-item>
           <n-form-item label="版本">
             <n-input :value="currentTreeNode.version" disabled />
+          </n-form-item>
+          <n-form-item label="版本 (O)">
+            <n-input :value="currentTreeNode.version_o" disabled />
+          </n-form-item>
+          <n-form-item label="版本 (T)">
+            <n-input :value="currentTreeNode.version_t" disabled />
           </n-form-item>
         </n-form>
         <template #footer>

@@ -176,7 +176,7 @@ export class XmRouter {
         Infinity,
         table
       );
-      if (!trees || !trees.length) {
+      if (!Array.isArray(trees)) {
         return XmRouter.gzipResponse(
           { code: 404, msg: `No root nodes found in ${dbName}` },
           404

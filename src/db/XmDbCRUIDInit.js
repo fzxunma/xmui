@@ -6,8 +6,8 @@ import { dirname, resolve } from "path";
 export default class XmDbCRUDInit {
   static async init() {
     await XmDbCRUDInit.initPath("init");
-    const dbNames = await XmDbCRUDInit.dbInit();
-    await XmDbCRUDInit.dataInit(dbNames);
+    await XmDbCRUDInit.dbInit();
+    //await XmDbCRUDInit.dataInit(dbNames);
   }
   static async initPath(dbName) {
     try {
@@ -58,12 +58,12 @@ export default class XmDbCRUDInit {
 
       // 检查表是否已经存在
       let tablesExist = true;
-      for (const type of XmDb.knownTypes) {
+      for (const tableName of XmDb.knownTableNames) {
         const tableExists = db
           .prepare(
             `SELECT name FROM sqlite_master WHERE type='table' AND name=?`
           )
-          .get(type);
+          .get(tableName);
 
         if (!tableExists) {
           tablesExist = false;
@@ -74,10 +74,10 @@ export default class XmDbCRUDInit {
       if (tablesExist) {
         // 表存在，检查是否有数据
         let totalCount = 0;
-        for (const type of XmDb.knownTypes) {
+        for (const tableName of XmDb.knownTableNames) {
           const countRow = db
             .prepare(
-              `SELECT COUNT(*) as count FROM \`${type}\` WHERE delete_time IS NULL`
+              `SELECT COUNT(*) as count FROM \`${tableName}\` WHERE delete_time IS NULL`
             )
             .get();
           totalCount += countRow.count;
@@ -86,15 +86,15 @@ export default class XmDbCRUDInit {
         if (totalCount > 0) {
           XmDb.log(`Data already initialized for ${dbName}, skipping.`);
           // 加载现有数据到缓存
-          for (const type of XmDb.knownTypes) {
-            await XmDb.loadTable(type, dbName);
+          for (const tableName of XmDb.knownTableNames) {
+            await XmDb.loadTable(tableName, dbName);
           }
           continue;
         }
       } else {
         // 表不存在，需要创建表
-        for (const type of XmDb.knownTypes) {
-          await XmDb.ensureTable(type, dbName);
+        for (const tableName of XmDb.knownTableNames) {
+          await XmDb.ensureTable(tableName, dbName);
         }
       }
 
@@ -109,7 +109,7 @@ export default class XmDbCRUDInit {
       try {
         // 创建初始数据
         const root1 = await XmDbCRUD.create({
-          type: "tree",
+          tableName: "tree",
           pid: 0,
           name: "Root1",
           uniqueFields: [],
@@ -118,7 +118,7 @@ export default class XmDbCRUDInit {
         });
 
         const root2 = await XmDbCRUD.create({
-          type: "tree",
+          tableName: "tree",
           pid: 0,
           name: "Root2",
           uniqueFields: [],
@@ -132,7 +132,7 @@ export default class XmDbCRUDInit {
         const childIds = [];
         for (let i = 1; i <= 5; i++) {
           const child = await XmDbCRUD.create({
-            type: "tree",
+            tableName: "tree",
             pid: rootId1,
             name: `Child-${i}`,
             uniqueFields: [],
@@ -141,7 +141,7 @@ export default class XmDbCRUDInit {
           });
           childIds.push(child.id);
           await XmDbCRUD.create({
-            type: "list",
+            tableName: "list",
             pid: rootId1,
             name: `Item-Child-${i}`,
             uniqueFields: [],
@@ -151,7 +151,7 @@ export default class XmDbCRUDInit {
         }
 
         const subchild = await XmDbCRUD.create({
-          type: "tree",
+          tableName: "tree",
           pid: childIds[0],
           name: "Subchild-1",
           uniqueFields: [],
@@ -159,7 +159,7 @@ export default class XmDbCRUDInit {
           dbName,
         });
         await XmDbCRUD.create({
-          type: "list",
+          tableName: "list",
           pid: childIds[0],
           name: "Item-Subchild-1",
           uniqueFields: [],
@@ -169,7 +169,7 @@ export default class XmDbCRUDInit {
 
         for (let i = 1; i <= 5; i++) {
           await XmDbCRUD.create({
-            type: "list",
+            tableName: "list",
             pid: 0,
             name: `root-${i}`,
             uniqueFields: [],
