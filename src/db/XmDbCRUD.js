@@ -1,3 +1,4 @@
+// Updated XmDbCRUD.js
 import XmDb from "./XmDb";
 
 export class XmDbCRUD {
@@ -29,6 +30,7 @@ export class XmDbCRUD {
     data = null,
     data_o = null,
     data_t = null,
+    data_a = null,
     req = null,
     userId = null,
   }) {
@@ -77,6 +79,7 @@ export class XmDbCRUD {
       let dataJson = null;
       let dataOJson = null;
       let dataTJson = null;
+      let dataAJson = null;
       if (data) {
         dataJson = typeof data === "string" ? data : JSON.stringify(data);
       }
@@ -88,10 +91,14 @@ export class XmDbCRUD {
         dataTJson =
           typeof data_t === "string" ? data_t : JSON.stringify(data_t);
       }
+      if (data_a) {
+        dataAJson =
+          typeof data_a === "string" ? data_a : JSON.stringify(data_a);
+      }
 
       const stmt = db.prepare(`
-        INSERT INTO \`${tableName}\` (pid, name, key, type, version, version_o, version_t, data, data_o, data_t, create_time, update_time)
-        VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, strftime('%s', 'now'), strftime('%s', 'now')) RETURNING *`);
+        INSERT INTO \`${tableName}\` (pid, name, key, type, version, version_o, version_t, version_a, data, data_o, data_t, data_a, create_time, update_time)
+        VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'), strftime('%s', 'now')) RETURNING *`);
       const row = stmt.get(
         pid,
         name,
@@ -99,9 +106,11 @@ export class XmDbCRUD {
         type,
         data_o ? 1 : 0,
         data_t ? 1 : 0,
+        data_a ? 1 : 0,
         dataJson,
         dataOJson,
-        dataTJson
+        dataTJson,
+        dataAJson
       );
 
       // 记录创建日志到日志表
@@ -122,11 +131,13 @@ export class XmDbCRUD {
           version: row.version,
           version_o: row.version_o,
           version_t: row.version_t,
+          version_a: row.version_a,
           ip: this.getClientIP(req),
           userId: userId,
           data: data,
           data_o: data_o,
           data_t: data_t,
+          data_a: data_a,
         },
         req: req,
       });
@@ -156,6 +167,7 @@ export class XmDbCRUD {
           data: data,
           data_o: data_o,
           data_t: data_t,
+          data_a: data_a,
         },
         req: req,
       });
@@ -320,7 +332,7 @@ export class XmDbCRUD {
         throw new Error(`Record with id ${id} not found in ${tableName}`);
       }
 
-      // 检查版本一致性
+      // Check version consistency
       if (expectedVersion !== null && existing.version !== expectedVersion) {
         const errorMsg = `Version conflict: expected ${expectedVersion}, but found ${existing.version} for ${tableName} id ${id} in ${dbName}`;
         XmDb.log(errorMsg, "warn");
@@ -346,7 +358,7 @@ export class XmDbCRUD {
         throw new Error(errorMsg);
       }
 
-      // 处理 name 和 pid 更新
+      // Handle name, pid, and key updates
       const newName = updates.name !== undefined ? updates.name : existing.name;
       const newPid =
         updates.pid !== undefined
@@ -356,13 +368,9 @@ export class XmDbCRUD {
           : existing.pid;
       const compositeKey = `${newName}_${newPid}`;
       const oldCompositeKey = `${existing.name}_${existing.pid}`;
+      const newKey = updates.key !== undefined ? updates.key : compositeKey;
 
-      // 处理 key 更新
-      if (updates.key === undefined) {
-        updates.key = compositeKey;
-      }
-
-      // 检查唯一约束
+      // Check unique constraint
       if (
         XmDb.keyCache.has(`${cacheKey}:${compositeKey}`) &&
         compositeKey !== oldCompositeKey
@@ -372,122 +380,210 @@ export class XmDbCRUD {
         );
       }
 
-      // 处理 data 更新
-      let dataChanged = false;
+      // Track changed fields and prepare data
+      const changedFields = [];
+      let newVersion = existing.version;
+      let newVersionO = existing.version_o || 0;
+      let newVersionT = existing.version_t || 0;
+      let newVersionA = existing.version_a || 1; // Fallback for old records
+      let dataJson = existing.data;
+      let dataOJson = existing.data_o;
+      let dataTJson = existing.data_t;
+      let dataAJson = existing.data_a || null; // Fallback for old records
+
       if (updates.data !== undefined) {
-        if (updates.data === null) {
-          updates.data = null;
-          dataChanged = existing.data !== null;
-        } else {
-          updates.data =
-            typeof updates.data === "string"
-              ? updates.data
-              : JSON.stringify(updates.data);
-          dataChanged = updates.data !== existing.data;
+        const newDataJson =
+          updates.data === null
+            ? null
+            : typeof updates.data === "string"
+            ? updates.data
+            : JSON.stringify(updates.data);
+        const existingDataJson =
+          existing.data === null ? null : String(existing.data); // Normalize to string
+        if (newDataJson !== existingDataJson) {
+          dataJson = newDataJson;
+          newVersion = existing.version + 1;
+          changedFields.push("data");
         }
       }
 
-      let dataOChanged = false;
       if (updates.data_o !== undefined) {
-        if (updates.data_o === null) {
-          updates.data_o = null;
-          dataOChanged = existing.data_o !== null;
-        } else {
-          updates.data_o =
-            typeof updates.data_o === "string"
-              ? updates.data_o
-              : JSON.stringify(updates.data_o);
-          dataOChanged = updates.data_o !== existing.data_o;
+        const newDataOJson =
+          updates.data_o === null
+            ? null
+            : typeof updates.data_o === "string"
+            ? updates.data_o
+            : JSON.stringify(updates.data_o);
+        const existingDataOJson =
+          existing.data_o === null ? null : String(existing.data_o); // Normalize to string
+        if (newDataOJson !== existingDataOJson) {
+          dataOJson = newDataOJson;
+          newVersionO = (existing.version_o || 0) + 1;
+          changedFields.push("data_o");
         }
       }
 
-      let dataTChanged = false;
       if (updates.data_t !== undefined) {
-        if (updates.data_t === null) {
-          updates.data_t = null;
-          dataTChanged = existing.data_t !== null;
-        } else {
-          updates.data_t =
-            typeof updates.data_t === "string"
-              ? updates.data_t
-              : JSON.stringify(updates.data_t);
-          dataTChanged = updates.data_t !== existing.data_t;
+        const newDataTJson =
+          updates.data_t === null
+            ? null
+            : typeof updates.data_t === "string"
+            ? updates.data_t
+            : JSON.stringify(updates.data_t);
+        const existingDataTJson =
+          existing.data_t === null ? null : String(existing.data_t); // Normalize to string
+        if (newDataTJson !== existingDataTJson) {
+          dataTJson = newDataTJson;
+          newVersionT = (existing.version_t || 0) + 1;
+          changedFields.push("data_t");
         }
       }
 
-      // 版本号递增（仅当值实际发生变化时）
-      const newVersion =
-        (updates.name !== undefined && updates.name !== existing.name) ||
-        (updates.pid !== undefined && updates.pid !== existing.pid) ||
-        (updates.type !== undefined && updates.type !== existing.type) ||
-        dataChanged
-          ? (existing.version || 0) + 1
-          : existing.version;
-      const newVersionO = dataOChanged
-        ? (existing.version_o || 0) + 1
-        : existing.version_o;
-      const newVersionT = dataTChanged
-        ? (existing.version_t || 0) + 1
-        : existing.version_t;
+      if (updates.data_a !== undefined) {
+        const newDataAJson =
+          updates.data_a === null
+            ? null
+            : typeof updates.data_a === "string"
+            ? updates.data_a
+            : JSON.stringify(updates.data_a);
+        const existingDataAJson =
+          existing.data_a === null ? null : String(existing.data_a); // Normalize to string
+        if (newDataAJson !== existingDataAJson) {
+          dataAJson = newDataAJson;
+          newVersionA = (existing.version_a || 1) + 1;
+          changedFields.push("data_a");
+        }
+      }
+      if (updates.name !== undefined && newName !== existing.name) {
+        changedFields.push("name");
+      }
+      if (updates.pid !== undefined && newPid !== existing.pid) {
+        changedFields.push("pid");
+      }
+      if (updates.key !== undefined && updates.key !== existing.key) {
+        changedFields.push("key");
+      }
+      if (updates.type !== undefined && updates.type !== existing.type) {
+        changedFields.push("type");
+      }
 
-      updates.version = newVersion;
-      updates.version_o = newVersionO;
-      updates.version_t = newVersionT;
+      const updateFields = [];
+      const updateValues = [];
 
-      const updatedData = {
+      if (updates.name !== undefined) {
+        updateFields.push("name = ?");
+        updateValues.push(newName);
+      }
+      if (updates.pid !== undefined) {
+        updateFields.push("pid = ?");
+        updateValues.push(newPid);
+      }
+      if (updates.key !== undefined || newKey !== existing.key) {
+        updateFields.push("key = ?");
+        updateValues.push(newKey);
+      }
+      if (updates.type !== undefined) {
+        updateFields.push("type = ?");
+        updateValues.push(updates.type);
+      }
+      if (updates.data !== undefined && dataJson !== existing.data) {
+        updateFields.push("data = ?");
+        updateValues.push(dataJson);
+        updateFields.push("version = ?");
+        updateValues.push(newVersion);
+      }
+      if (updates.data_o !== undefined && dataOJson !== existing.data_o) {
+        updateFields.push("data_o = ?");
+        updateValues.push(dataOJson);
+        updateFields.push("version_o = ?");
+        updateValues.push(newVersionO);
+      }
+      if (updates.data_t !== undefined && dataTJson !== existing.data_t) {
+        updateFields.push("data_t = ?");
+        updateValues.push(dataTJson);
+        updateFields.push("version_t = ?");
+        updateValues.push(newVersionT);
+      }
+      if (updates.data_a !== undefined && dataAJson !== existing.data_a) {
+        updateFields.push("data_a = ?");
+        updateValues.push(dataAJson);
+        updateFields.push("version_a = ?");
+        updateValues.push(newVersionA);
+      }
+
+      updateFields.push("update_time = strftime('%s', 'now')");
+
+      if (updateFields.length === 0) {
+        XmDb.log(
+          `No changes applied to ${tableName} record with id ${id} in ${dbName}`,
+          "info"
+        );
+        return existing; // No updates
+      }
+
+      const query = `UPDATE \`${tableName}\` SET ${updateFields.join(
+        ", "
+      )} WHERE id = ? AND delete_time IS NULL`;
+      updateValues.push(id);
+
+      const result = db.run(query, updateValues);
+
+      if (result.changes === 0) {
+        throw new Error(
+          `No record updated for ${tableName} id ${id} in ${dbName}`
+        );
+      }
+
+      // Create updated row for cache and return
+      const updatedRow = {
         ...existing,
-        ...updates,
+        name: newName,
+        pid: newPid,
+        key: newKey,
+        type: updates.type !== undefined ? updates.type : existing.type,
+        version: newVersion,
+        version_o: newVersionO,
+        version_t: newVersionT,
+        version_a: newVersionA,
+        data: dataJson,
+        data_o: dataOJson,
+        data_t: dataTJson,
+        data_a: dataAJson,
         update_time: Math.floor(Date.now() / 1000),
       };
 
-      const keys = Object.keys(updates);
-      const values = Object.values(updates);
+      // Update caches
+      XmDb.idCache.set(`${cacheKey}:${id}`, updatedRow);
+      // if (
+      //   updates.name !== undefined ||
+      //   updates.pid !== undefined ||
+      //   updates.key !== undefined
+      // ) {
+        XmDb.keyCache.delete(`${cacheKey}:${oldCompositeKey}`);
+        XmDb.keyCache.set(`${cacheKey}:${compositeKey}`, updatedRow);
 
-      // 在 WHERE 条件中加入版本检查
-      const result = db.run(
-        `UPDATE \`${tableName}\` SET ${keys
-          .map((k) => `${k} = ?`)
-          .join(
-            ", "
-          )}, update_time = strftime('%s', 'now') WHERE id = ? AND delete_time IS NULL AND version = ?`,
-        [...values, id, existing.version]
-      );
+        // Update pidCache
+        if (existing.pid !== newPid) {
+          const oldPidRows =
+            XmDb.pidCache.get(`${cacheKey}:${existing.pid}`) || [];
+          XmDb.pidCache.set(
+            `${cacheKey}:${existing.pid}`,
+            oldPidRows.filter((row) => row.id !== id)
+          );
+          const newPidRows = XmDb.pidCache.get(`${cacheKey}:${newPid}`) || [];
+          newPidRows.push(updatedRow);
+          XmDb.pidCache.set(`${cacheKey}:${newPid}`, newPidRows);
+        } else {
+          const pidRows =
+            XmDb.pidCache.get(`${cacheKey}:${existing.pid}`) || [];
+          const updatedPidRows = pidRows.map((row) =>
+            row.id === id ? updatedRow : row
+          );
+          XmDb.pidCache.set(`${cacheKey}:${existing.pid}`, updatedPidRows);
+        }
+      //}
 
-      // 检查是否有行被更新
-      if (result.changes === 0) {
-        const errorMsg = `Version conflict or record not found during update for ${tableName} id ${id} in ${dbName}`;
-        XmDb.log(errorMsg, "warn");
-
-        await this.logOperation({
-          dbName: "xmlog",
-          tableType: "log",
-          operation: "update",
-          recordId: id,
-          databaseName: dbName,
-          tableName: tableName,
-          success: false,
-          message: errorMsg,
-          details: {
-            ip: this.getClientIP(req),
-            userId: userId,
-          },
-          req: req,
-        });
-
-        throw new Error(errorMsg);
-      }
-
-      // 记录更新日志
-      const changedFields = Object.keys(updates).filter(
-        (key) =>
-          !["version", "version_o", "version_t"].includes(key) &&
-          ((key === "name" && updates.name !== existing.name) ||
-            (key === "pid" && updates.pid !== existing.pid) ||
-            (key === "type" && updates.type !== existing.type) ||
-            (key === "data" && dataChanged) ||
-            (key === "data_o" && dataOChanged) ||
-            (key === "data_t" && dataTChanged))
-      );
+      // Log update operation
       const logMessage = changedFields.length
         ? `Updated ${tableName} record with id ${id} in ${dbName} (changed: ${changedFields.join(
             ", "
@@ -505,49 +601,23 @@ export class XmDbCRUD {
         success: true,
         message: logMessage,
         details: {
-          updates: updates,
-          changedFields: changedFields,
+          updates,
+          changedFields,
           oldVersion: existing.version,
-          newVersion: newVersion,
-          oldVersionO: existing.version_o,
-          newVersionO: newVersionO,
-          oldVersionT: existing.version_t,
-          newVersionT: newVersionT,
+          newVersion,
+          oldVersionO: existing.version_o || 0,
+          newVersionO,
+          oldVersionT: existing.version_t || 0,
+          newVersionT,
+          oldVersionA: existing.version_a || 1,
+          newVersionA,
           ip: this.getClientIP(req),
           userId: userId,
         },
         req: req,
       });
 
-      XmDb.keyCache.delete(`${cacheKey}:${oldCompositeKey}`);
-      XmDb.keyCache.set(`${cacheKey}:${compositeKey}`, updatedData);
-
-      if (existing.pid !== newPid) {
-        // Remove from all pidCache entries where this id appears
-        for (const [key, rows] of XmDb.pidCache.entries()) {
-          if (key.startsWith(cacheKey) && rows.some((row) => row.id === id)) {
-            XmDb.pidCache.set(
-              key,
-              rows.filter((row) => row.id !== id)
-            );
-          }
-        }
-        // Add to new pidCache entry
-        const newPidRows = XmDb.pidCache.get(`${cacheKey}:${newPid}`) || [];
-        if (!newPidRows.some((row) => row.id === id)) {
-          newPidRows.push(updatedData);
-        }
-        XmDb.pidCache.set(`${cacheKey}:${newPid}`, newPidRows);
-      } else {
-        // Update existing pidCache entry with updatedData
-        const pidRows = XmDb.pidCache.get(`${cacheKey}:${existing.pid}`) || [];
-        const updatedPidRows = pidRows.map((row) =>
-          row.id === id ? updatedData : row
-        );
-        XmDb.pidCache.set(`${cacheKey}:${existing.pid}`, updatedPidRows);
-      }
-      XmDb.idCache.set(`${cacheKey}:${id}`, updatedData);
-      return updatedData;
+      return updatedRow;
     } catch (error) {
       await this.logOperation({
         dbName: "xmlog",
@@ -559,7 +629,7 @@ export class XmDbCRUD {
         success: false,
         message: `Update ${tableName} id ${id} failed in ${dbName}: ${error.message}`,
         details: {
-          updates: updates,
+          updates,
           ip: this.getClientIP(req),
           userId: userId,
         },
@@ -780,7 +850,7 @@ export class XmDbCRUD {
       return JSON.parse(data);
     } catch (error) {
       XmDb.log(`Failed to parse data: ${error.message}`, "warn");
-      return data; // 返回原始字符串
+      return null; // 返回原始字符串
     }
   }
 
@@ -855,6 +925,7 @@ export class XmDbCRUD {
         if (data.data !== undefined) updates.data = data.data;
         if (data.data_o !== undefined) updates.data_o = data.data_o;
         if (data.data_t !== undefined) updates.data_t = data.data_t;
+        if (data.data_a !== undefined) updates.data_a = data.data_a;
         updates.version = existing.version;
         return await this.update({
           tableName,
@@ -877,6 +948,7 @@ export class XmDbCRUD {
           data: data.data || null,
           data_o: data.data_o || null,
           data_t: data.data_t || null,
+          data_a: data.data_a || null,
           req,
           userId,
         });
@@ -896,6 +968,7 @@ export class XmDbCRUD {
           data: data.data,
           data_o: data.data_o,
           data_t: data.data_t,
+          data_a: data.data_a,
           ip: this.getClientIP(req),
           userId: userId,
         },

@@ -1,3 +1,4 @@
+<!-- Updated XmTreePage.vue -->
 <script>
 import { ref, computed, onMounted, watch, h } from 'vue';
 import naive from 'naive-ui';
@@ -33,9 +34,11 @@ export default {
       data: '',
       data_o: '',
       data_t: '',
+      data_a: '',
       version: 1,
       version_o: 0,
-      version_t: 0
+      version_t: 0,
+      version_a: 0
     });
     const selectedKeys = ref([]);
     const errorMessage = ref('');
@@ -54,9 +57,11 @@ export default {
         version: node.version,
         version_o: node.version_o,
         version_t: node.version_t,
+        version_a: node.version_a,
         data: node.data,
         data_o: node.data_o,
         data_t: node.data_t,
+        data_a: node.data_a,
       }));
     });
 
@@ -78,6 +83,7 @@ export default {
       { title: '数据', key: 'data', width: 150 },
       { title: '数据 (O)', key: 'data_o', width: 150 },
       { title: '数据 (T)', key: 'data_t', width: 150 },
+      { title: '数据 (A)', key: 'data_a', width: 150 },
       {
         title: '类别',
         key: 'pid',
@@ -91,6 +97,7 @@ export default {
       { title: '版本', key: 'version', width: 80 },
       { title: '版本 (O)', key: 'version_o', width: 80 },
       { title: '版本 (T)', key: 'version_t', width: 80 },
+      { title: '版本 (A)', key: 'version_a', width: 80 },
       {
         title: '动作',
         key: 'actions',
@@ -172,6 +179,7 @@ export default {
         data: currentTreeNode.value.data,
         data_o: currentTreeNode.value.data_o,
         data_t: currentTreeNode.value.data_t,
+        data_a: currentTreeNode.value.data_a,
       };
       try {
         const action = isTreeEdit.value ? 'edit' : 'add';
@@ -215,9 +223,11 @@ export default {
         data: '',
         data_o: '',
         data_t: '',
+        data_a: '',
         version: 1,
         version_o: 0,
-        version_t: 0
+        version_t: 0,
+        version_a: 0
       };
       showTreeModal.value = true;
     };
@@ -233,9 +243,11 @@ export default {
         data: node.data || '',
         data_o: node.data_o || '',
         data_t: node.data_t || '',
+        data_a: node.data_a || '',
         version: node.version,
         version_o: node.version_o,
-        version_t: node.version_t
+        version_t: node.version_t,
+        version_a: node.version_a
       };
       showTreeModal.value = true;
     };
@@ -249,12 +261,13 @@ export default {
     };
 
     const handleTableSelect = (keys) => {
-      selectedKeys.value = keys;
+      //selectedKeys.value = keys;
     };
 
     const handleTabChange = async (value) => {
       table.value = value;
-      editorRef.value.setContent(testData);
+     // editorRef.value.setContent(testData);
+      console.log(editorRef.value.getJSON())
       await fetchListData();
     };
 
@@ -282,12 +295,11 @@ export default {
           const ids = filteredTreeNodes.value.map(item => item.id);
           const pid = selectedKeys.value.length ? selectedKeys.value[0] : null;
           const input = {
-            name: "orders",
-            pid,
-            data: ids,
+            id:pid,
+            data_o: ids,
           };
-          const action = 'upsert';
-          await XmApiRequest(action, input, "orders");
+          const action = 'edit';
+          await XmApiRequest(action, input, "tree");
           await loadData();
         },
       });
@@ -412,6 +424,9 @@ export default {
           <n-form-item label="数据 (T)">
             <n-input v-model:value="currentTreeNode.data_t" placeholder="Enter data_t" />
           </n-form-item>
+          <n-form-item label="数据 (A)">
+            <n-input v-model:value="currentTreeNode.data_a" placeholder="Enter data_a" />
+          </n-form-item>
           <n-form-item label="类别" v-if="isTreeEdit">
             <n-tree-select
               v-model:value="currentTreeNode.pid"
@@ -438,6 +453,9 @@ export default {
           </n-form-item>
           <n-form-item label="版本 (T)">
             <n-input :value="currentTreeNode.version_t" disabled />
+          </n-form-item>
+          <n-form-item label="版本 (A)">
+            <n-input :value="currentTreeNode.version_a" disabled />
           </n-form-item>
         </n-form>
         <template #footer>

@@ -1,3 +1,4 @@
+// Updated XmDb.js
 export default class XmDb {
   static dbs = new Map();
   static idCache = new Map();
@@ -19,9 +20,11 @@ export default class XmDb {
     version INTEGER DEFAULT 1,
     version_t INTEGER DEFAULT 1,
     version_o INTEGER DEFAULT 1,
+    version_a INTEGER DEFAULT 1,
     data JSON,
     data_t JSON,
     data_o JSON,
+    data_a JSON,
     create_time INTEGER DEFAULT (strftime('%s', 'now')),
     update_time INTEGER DEFAULT (strftime('%s', 'now')),
     delete_time INTEGER DEFAULT NULL

@@ -1,3 +1,4 @@
+// Updated XmDbCRUDTree.js
 import { XmDbCRUD, XmDb } from "./XmDbCRUD";
 
 export default class XmDbTreeCURD {
@@ -21,6 +22,7 @@ export default class XmDbTreeCURD {
         data: data.data,
         data_o: data.data_o,
         data_t: data.data_t,
+        data_a: data.data_a,
         req,
         userId: 0,
       });
@@ -35,6 +37,7 @@ export default class XmDbTreeCURD {
             key: treeNode.key,
             data_o: treeNode.data_o,
             data_t: treeNode.data_t,
+            data_a: treeNode.data_a,
           },
         },
         201
@@ -48,7 +51,7 @@ export default class XmDbTreeCURD {
       }
       const code =
         error.message.includes("Unique constraint violation") ||
-          error.message.includes("Invalid")
+        error.message.includes("Invalid")
           ? 400
           : 500;
       return XmRouter.gzipResponse(
@@ -69,7 +72,7 @@ export default class XmDbTreeCURD {
           400
         );
       }
-      const { pid = 0, type,name } = data;
+      const { pid = 0, type, name } = data;
       const treeNode = await XmDbCRUD.upsert({
         tableName: treeTable,
         pid: pid ? pid : 0,
@@ -79,6 +82,7 @@ export default class XmDbTreeCURD {
           data: data.data,
           data_o: data.data_o,
           data_t: data.data_t,
+          data_a: data.data_a,
         },
         dbName,
         req,
@@ -95,6 +99,7 @@ export default class XmDbTreeCURD {
             key: treeNode.key,
             data_o: treeNode.data_o,
             data_t: treeNode.data_t,
+            data_a: treeNode.data_a,
           },
         },
         201
@@ -108,7 +113,7 @@ export default class XmDbTreeCURD {
       }
       const code =
         error.message.includes("Unique constraint violation") ||
-          error.message.includes("Invalid")
+        error.message.includes("Invalid")
           ? 400
           : 500;
       return XmRouter.gzipResponse(
@@ -203,14 +208,9 @@ export default class XmDbTreeCURD {
     try {
       await XmDb.ensureTable(treeTable, dbName);
       const cacheKeyTree = `${dbName}:${treeTable}`;
-      const ordersKeyTree = `${dbName}:orders:orders`;
 
       const build = (id, currentDepth = 1) => {
         const node = XmDb.idCache.get(`${cacheKeyTree}:${id}`);
-        const orderRecord = XmDb.keyCache.get(`${ordersKeyTree}_${id}`);
-        if (orderRecord && orderRecord.data) {
-          node.order = XmDbCRUD.parseData(orderRecord.data);
-        }
 
         if (!node) {
           XmDb.log(`Node ${id} not found in ${dbName}`, "warn");
@@ -224,19 +224,22 @@ export default class XmDbTreeCURD {
         }
         let childrenRows = XmDb.pidCache.get(`${cacheKeyTree}:${id}`) || [];
 
-        // 子节点排序
-        if (node.order && Array.isArray(node.order)) {
-          const orderMap = new Map(node.order.map((cid, idx) => [cid, idx]));
+        const orders = XmDbCRUD.parseData(node.data_o);
+        if (orders && Array.isArray(orders)) {
+          const orderMap = new Map(orders.map((cid, idx) => [cid, idx]));
           childrenRows.sort(
-            (a, b) => (orderMap.get(a.id) ?? Infinity) - (orderMap.get(b.id) ?? Infinity)
+            (a, b) =>
+              (orderMap.get(a.id) ?? Infinity) -
+              (orderMap.get(b.id) ?? Infinity)
           );
         }
-
         // 子节点分页
         childrenRows = childrenRows.slice((page - 1) * limit, page * limit);
 
         // 递归构建子树
-        const children = childrenRows.map((n) => build(n.id, currentDepth + 1)).filter(Boolean);
+        const children = childrenRows
+          .map((n) => build(n.id, currentDepth + 1))
+          .filter(Boolean);
 
         const result = { ...node };
         if (children.length > 0) {
@@ -252,17 +255,13 @@ export default class XmDbTreeCURD {
         // 根节点为 pid=0 的所有节点
         let rootNodes = XmDb.pidCache.get(`${cacheKeyTree}:0`) || [];
 
-        // 根节点排序依据
-        const rootOrderRecord = XmDb.keyCache.get(`${ordersKeyTree}_0`);
-        let rootOrder = null;
-        if (rootOrderRecord && rootOrderRecord.data) {
-          rootOrder = XmDbCRUD.parseData(rootOrderRecord.data);
-        }
-
+        const rootOrder = XmDbCRUD.parseData(rootNodes.data_o);
         if (rootOrder && Array.isArray(rootOrder)) {
           const orderMap = new Map(rootOrder.map((cid, idx) => [cid, idx]));
           rootNodes.sort(
-            (a, b) => (orderMap.get(a.id) ?? Infinity) - (orderMap.get(b.id) ?? Infinity)
+            (a, b) =>
+              (orderMap.get(a.id) ?? Infinity) -
+              (orderMap.get(b.id) ?? Infinity)
           );
         }
 
@@ -299,6 +298,7 @@ export default class XmDbTreeCURD {
       if (data.data !== undefined) updates.data = data.data;
       if (data.data_o !== undefined) updates.data_o = data.data_o;
       if (data.data_t !== undefined) updates.data_t = data.data_t;
+      if (data.data_a !== undefined) updates.data_a = data.data_a;
       const updated = await XmDbCRUD.update({
         tableName: treeTable,
         id,
@@ -326,6 +326,7 @@ export default class XmDbTreeCURD {
             key: updated.key,
             data_o: updated.data_o,
             data_t: updated.data_t,
+            data_a: updated.data_a,
           },
         },
         200
