@@ -1,7 +1,7 @@
 // Updated XmDbCRUDTree.js
 import { XmDbCRUD, XmDb } from "./XmDbCRUD";
 
-export default class XmDbTreeCURD {
+export default class XmDbTree {
   static async handleCreateTreeNode(req, data, dbName, treeTable, XmRouter) {
     try {
       if (!data.name || typeof data.name !== "string") {

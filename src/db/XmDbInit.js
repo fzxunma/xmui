@@ -3,11 +3,11 @@ import { Database } from "bun:sqlite";
 import { mkdirSync, existsSync } from "fs";
 import { dirname, resolve } from "path";
 
-export default class XmDbCRUDInit {
+export default class XmDbInit {
   static async init() {
-    await XmDbCRUDInit.initPath("init");
-    await XmDbCRUDInit.dbInit();
-    //await XmDbCRUDInit.dataInit(dbNames);
+    await XmDbInit.initPath("init");
+    await XmDbInit.dbInit();
+    //await XmDbInit.dataInit(dbNames);
   }
   static async initPath(dbName) {
     try {

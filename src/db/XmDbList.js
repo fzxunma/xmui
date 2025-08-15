@@ -1,6 +1,6 @@
 import { XmDbCRUD, XmDb } from "./XmDbCRUD";
 
-export default class XmDbListCURD {
+export default class XmDbList {
   static async getListItems(
     pid = 0,
     page = 1,

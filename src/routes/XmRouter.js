@@ -1,8 +1,9 @@
 import { FileSystemRouter } from "bun";
 import { watch } from "fs/promises";
 import { XmProject } from "../project/XmProject.js";
-import XmDbTreeCURD from "../db/XmDbCRUDTree.js";
-import XmDbListCURD from "../db/XmDbCRUDList.js";
+import XmDbTree from "../db/XmDbTree.js";
+import XmDbList from "../db/XmDbList.js";
+import XmWord2Tree from "../db/XmWord2Tree.js";
 import { XmStaticFs } from "../fs/XmStaticFs.js";
 
 export class XmRouter {
@@ -113,8 +114,15 @@ export class XmRouter {
           return await XmRouter.handleTree(req, data, dbName, table);
         case "list":
           return await XmRouter.handleList(req, data, dbName, table);
+        case "d2t":
+          return await XmWord2Tree.convertDocumentToTree(
+            req,
+            dbName,
+            table,
+            XmRouter
+          )
         case "add":
-          return await XmDbTreeCURD.handleCreateTreeNode(
+          return await XmDbTree.handleCreateTreeNode(
             req,
             data,
             dbName,
@@ -122,7 +130,7 @@ export class XmRouter {
             XmRouter
           );
         case "edit":
-          return await XmDbTreeCURD.handleUpdateTreeNode(
+          return await XmDbTree.handleUpdateTreeNode(
             req,
             data,
             dbName,
@@ -131,15 +139,15 @@ export class XmRouter {
           );
         case "upsert":
           console.log(data)
-          return await XmDbTreeCURD.handleUpsertTreeNode(
+          return await XmDbTree.handleUpsertTreeNode(
             req,
             data,
             dbName,
             table,
             XmRouter
           );
-          case "delete":
-          return await XmDbTreeCURD.handleDeleteTreeNode(
+        case "delete":
+          return await XmDbTree.handleDeleteTreeNode(
             req,
             data,
             dbName,
@@ -168,7 +176,7 @@ export class XmRouter {
 
   static async handleTree(req, data, dbName, table) {
     try {
-      const trees = await XmDbTreeCURD.buildTree(
+      const trees = await XmDbTree.buildTree(
         0,
         dbName,
         Infinity,
@@ -205,7 +213,7 @@ export class XmRouter {
       const pid = data.pid || 0;
       const page = data.page || 1;
       const limit = data.limit || 100;
-      const listItems = await XmDbListCURD.getListItems(
+      const listItems = await XmDbList.getListItems(
         pid,
         page,
         limit,

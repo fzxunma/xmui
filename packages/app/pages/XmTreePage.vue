@@ -78,29 +78,29 @@ export default {
           );
         }
       },
-      { title: '名称', key: 'name', width: 150 },
-      { title: '类型', key: 'type', width: 120 },
-      { title: '数据', key: 'data', width: 150 },
-      { title: '数据 (O)', key: 'data_o', width: 150 },
-      { title: '数据 (T)', key: 'data_t', width: 150 },
-      { title: '数据 (A)', key: 'data_a', width: 150 },
+      { title: '名称', key: 'name' },
+      { title: '类型', key: 'type' },
+      { title: '数据', key: 'data' },
+      { title: '数据 (O)', key: 'data_o', },
+      { title: '数据 (T)', key: 'data_t' },
+      { title: '数据 (A)', key: 'data_a' },
       {
         title: '类别',
         key: 'pid',
-        width: 150,
         render: (row) => {
           if (!flatTreeNodes.value) return 'None';
           const parent = flatTreeNodes.value.find(n => n.value === row.pid);
           return parent ? parent.label : 'None';
         }
       },
-      { title: '版本', key: 'version', width: 80 },
-      { title: '版本 (O)', key: 'version_o', width: 80 },
-      { title: '版本 (T)', key: 'version_t', width: 80 },
-      { title: '版本 (A)', key: 'version_a', width: 80 },
+      { title: '版本', key: 'version' },
+      { title: '版本 (O)', key: 'version_o' },
+      { title: '版本 (T)', key: 'version_t' },
+      { title: '版本 (A)', key: 'version_a' },
       {
         title: '动作',
         key: 'actions',
+        width: 120,
         render: (row) => h(XmTableEdit, {
           row,
           onOpenTreeEdit: (row) => {
@@ -266,7 +266,7 @@ export default {
 
     const handleTabChange = async (value) => {
       table.value = value;
-     // editorRef.value.setContent(testData);
+      editorRef.value.setContent(testData);
       console.log(editorRef.value.getJSON())
       await fetchListData();
     };
@@ -295,7 +295,7 @@ export default {
           const ids = filteredTreeNodes.value.map(item => item.id);
           const pid = selectedKeys.value.length ? selectedKeys.value[0] : null;
           const input = {
-            id:pid,
+            id: pid,
             data_o: ids,
           };
           const action = 'edit';
@@ -309,8 +309,10 @@ export default {
       return window.innerHeight - 150;
     };
 
-    onMounted(() => {
+    onMounted(async () => {
       initDraggable();
+      const action = 'd2t';
+      await XmApiRequest(action, {}, "tree");
     });
 
     return {
@@ -347,19 +349,9 @@ export default {
       <!-- Tree View (Left) -->
       <div class="w-64 h-full min-h-0 p-2.5 border border-gray-200">
         <h2 class="text-xl font-semibold mb-2">编排</h2>
-        <n-tree
-          :data="treeData"
-          style="max-height: calc(100vh - 80px);"
-          key-field="id"
-          label-field="name"
-          show-line
-          expandable
-          block-line
-          virtual-scroll
-          selectable
-          :selected-keys="selectedKeys"
-          @update:selected-keys="handleTreeSelect"
-        />
+        <n-tree :data="treeData" style="max-height: calc(100vh - 80px);" key-field="id" label-field="name" show-line
+          expandable block-line virtual-scroll selectable :selected-keys="selectedKeys"
+          @update:selected-keys="handleTreeSelect" />
         <p v-if="treeData && !treeData.length" class="text-gray-500 mt-2">
           No tree nodes available. Add a node to start.
         </p>
@@ -375,26 +367,15 @@ export default {
         </div>
         <div v-show="table !== 'page'" class="h-full min-h-0">
           <div class="my-1">
-            <n-button
-              type="success"
-              class="p-4 bg-green-500 hover:bg-green-600 text-white font-semibold rounded"
-              @click="openTreeAdd"
-            >
+            <n-button type="success" class="p-4 bg-green-500 hover:bg-green-600 text-white font-semibold rounded"
+              @click="openTreeAdd">
               添加
             </n-button>
           </div>
           <div class="h-full min-h-0 overflow-y-auto">
-            <n-data-table
-              :columns="treeColumns"
-              :data="filteredTreeNodes || []"
-              :bordered="true"
-              :row-key="(row) => row.id"
-              :single-line="false"
-              :key="filteredTreeNodes?.length"
-              @update:checked-row-keys="handleTableSelect"
-              :max-height="adjustHeight()"
-              striped
-            />
+            <n-data-table :columns="treeColumns" :data="filteredTreeNodes || []" :bordered="true"
+              :row-key="(row) => row.id" :single-line="false" :key="filteredTreeNodes?.length"
+              @update:checked-row-keys="handleTableSelect" :max-height="adjustHeight()" striped />
             <p v-if="filteredTreeNodes && !filteredTreeNodes.length" class="text-gray-500 mt-2">
               {{ selectedKeys.length ? 'No child nodes for selected node.' : 'No nodes available.' }}
             </p>
@@ -402,12 +383,7 @@ export default {
         </div>
       </div>
 
-      <n-modal
-        v-model:show="showTreeModal"
-        preset="card"
-        :title="isTreeEdit ? '编辑' : '添加'"
-        style="width:400px"
-      >
+      <n-modal v-model:show="showTreeModal" preset="card" :title="isTreeEdit ? '编辑' : '添加'" style="width:400px">
         <n-form>
           <n-form-item label="名称">
             <n-input v-model:value="currentTreeNode.name" placeholder="Enter name" />
@@ -428,22 +404,13 @@ export default {
             <n-input v-model:value="currentTreeNode.data_a" placeholder="Enter data_a" />
           </n-form-item>
           <n-form-item label="类别" v-if="isTreeEdit">
-            <n-tree-select
-              v-model:value="currentTreeNode.pid"
-              :options="treeData"
-              placeholder="Select parent"
-              default-expand-all
-              value-field="id"
-              label-field="name"
-              key-field="id"
-              clearable
-            />
+            <n-tree-select v-model:value="currentTreeNode.pid" :options="treeData" placeholder="Select parent"
+              default-expand-all value-field="id" label-field="name" key-field="id" clearable />
           </n-form-item>
           <n-form-item label="类别" v-else>
             <n-input
               :value="selectedKeys.length ? flatTreeNodes.find(n => n.value === selectedKeys[0])?.label || 'None' : 'None'"
-              disabled
-            />
+              disabled />
           </n-form-item>
           <n-form-item label="版本">
             <n-input :value="currentTreeNode.version" disabled />
