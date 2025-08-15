@@ -6,7 +6,7 @@ const { useMessage, NButton, NPopconfirm, NIcon, NModal, NForm, NFormItem, NInpu
 import XmTableEdit from "../components/XmTableEditCheck.vue";
 import XmTableDragDropIcon from "../components/XmTableDragDropIcon.vue";
 import XmApiRequest from "../units/XmApiRequest.js";
-import umoOption from "../units/umoOption.js";
+import umoOption from "../vendor/umodoc/umoOption.js";
 import testData from "../units/test.js";
 import { useDraggable } from 'vue-draggable-plus'
 
@@ -16,6 +16,10 @@ export default {
     XmTableDragDropIcon
   },
   setup() {
+    umoOption.onSave = async (content, page, document) => {
+      console.log(content, page, document)
+      return true;
+    }
     const tableRef = ref(null);
     const editorRef = ref(null);
     const message = useMessage();
@@ -314,7 +318,12 @@ export default {
       const action = 'd2t';
       await XmApiRequest(action, {}, "tree");
     });
-
+    const onSaved = () => {
+      console.log('onSaved', '文档已保存，无可用参数')
+    }
+    const onChanged = (editor) => {
+      console.log('onChanged', '编辑器内容已更新，可用参数:', { editor })
+    }
     return {
       treeData,
       listData,
@@ -337,7 +346,9 @@ export default {
       table,
       umoOption,
       editorRef,
-      adjustHeight
+      adjustHeight,
+      onSaved,
+      onChanged
     };
   }
 }
@@ -363,7 +374,7 @@ export default {
           <n-tab name="tree" tab="数据"></n-tab>
         </n-tabs>
         <div v-show="table == 'page'" class="h-full min-h-0 overflow-y-auto">
-          <umo-editor v-bind="umoOption" ref="editorRef"></umo-editor>
+          <umo-editor v-bind="umoOption" ref="editorRef" @saved="onSaved" @changed="onChanged"></umo-editor>
         </div>
         <div v-show="table !== 'page'" class="h-full min-h-0">
           <div class="my-1">
