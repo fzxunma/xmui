@@ -1,181 +1,133 @@
-import XmDbTree from "./XmDbTree.js";
-import document from "./test.js";
-import { XmDbCRUD, XmDb } from "./XmDbCRUD";
-
+import document from "./test1.js";
+import { XmDbCRUD } from "./XmDbCRUD.js";
+class XmWordType {
+  static TEXT_TYPE = "text";
+  static PARAGRAPH_TYPE = "paragraph";
+  static HEADING_TYPE = "heading";
+  static DOC_TYPE = "doc";
+  static TABLE_TYPE = "table";
+  static TABLEROW_TYPE = "tableRow";
+  static TABLECELL_TYPE = "tableCell";
+  static HARDBREAK_TYPE = "hardBreak";
+}
 export default class XmWord2Tree {
-  static parseDocument(doc) {
+  static parseDocument(doc, index) {
     const nodes = [];
-    let currentParent = null;
-    let currentGrandparent = null;
-    let currentLevel = 0;
 
-    // Patterns to detect levels
-    const level1Pattern =
-      /^(活动时间：|主题：|目标：|提纲：|活动规则:|一、|二、|三、)/;
-    const level2Pattern = /^\d+、/;
-    const level3Pattern = /^\(\d+\)/;
-
-    // Extract text from paragraphs
-    doc.content.forEach((paragraph, index) => {
-      if (!paragraph.content) return;
-      console.log(index);
-      let text = "" + index;
-      let isHeader = false;
-      let level = 0;
-      let description = "";
-
-      paragraph.content.forEach((item) => {
-        if (item.type === "text") {
-          text += item.text;
-        } else if (item.type === "hardBreak") {
-          // Process the accumulated text as a line
-          if (text.trim()) {
-            // Determine level
-            if (level1Pattern.test(text)) {
-              level = 1;
-              isHeader = true;
-            } else if (level2Pattern.test(text)) {
-              level = 2;
-              isHeader = true;
-            } else if (level3Pattern.test(text)) {
-              level = 3;
-              isHeader = true;
-            } else {
-              level = currentLevel; // Inherit level for non-header lines
-            }
-
-            // Split header into name and description
-            let name = text;
-            if (isHeader) {
-              const split = text.split(/[:：]/);
-              name = split[0].trim();
-              description =
-                split.length > 1 ? split.slice(1).join(":").trim() : "";
-            } else {
-              description = text.trim();
-            }
-
-            // Build node
-            if (isHeader) {
-              const node = {
-                name,
-                data: description || null,
-                level,
-                children: [],
-              };
-
-              if (level === 1) {
-                nodes.push(node);
-                currentParent = node;
-                currentGrandparent = null;
-              } else if (level === 2) {
-                if (currentParent) {
-                  currentParent.children.push(node);
-                  currentGrandparent = node;
-                } else {
-                  // Fallback: treat as level 1 if no parent
-                  nodes.push(node);
-                  currentParent = node;
-                }
-              } else if (level === 3) {
-                if (currentGrandparent) {
-                  currentGrandparent.children.push(node);
-                } else if (currentParent) {
-                  currentParent.children.push(node);
-                  currentGrandparent = node;
-                } else {
-                  // Fallback: treat as level 1
-                  nodes.push(node);
-                  currentParent = node;
-                }
-              }
-              currentLevel = level;
-            } else if (currentGrandparent && level === 3) {
-              currentGrandparent.data =
-                (currentGrandparent.data || "") +
-                (currentGrandparent.data ? " " : "") +
-                description;
-            } else if (currentParent) {
-              currentParent.data =
-                (currentParent.data || "") +
-                (currentParent.data ? " " : "") +
-                description;
-            }
-          }
-          text = ""; // Reset text after processing
-        }
-      });
-
-      // Handle last text segment if no hardBreak
-      if (text.trim()) {
-        if (level1Pattern.test(text)) {
-          level = 1;
-          isHeader = true;
-        } else if (level2Pattern.test(text)) {
-          level = 2;
-          isHeader = true;
-        } else if (level3Pattern.test(text)) {
-          level = 3;
-          isHeader = true;
-        } else {
-          level = currentLevel;
-        }
-
-        let name = text;
-        if (isHeader) {
-          const split = text.split(/[:：]/);
-          name = split[0].trim();
-          description = split.length > 1 ? split.slice(1).join(":").trim() : "";
-        } else {
-          description = text.trim();
-        }
-
-        if (isHeader) {
+    switch (doc.type) {
+      case XmWordType.DOC_TYPE:
+        doc.content.forEach((paragraph, cindex) => {
+          const docNodes = XmWord2Tree.parseDocument(paragraph, cindex);
+          nodes.push(...docNodes);
+        });
+        break;
+      case XmWordType.PARAGRAPH_TYPE:
+        doc.content.forEach((paragraph, cindex) => {
+          const items = XmWord2Tree.parseDocument(
+            paragraph,
+            index + ":" + cindex
+          );
           const node = {
-            name,
-            data: description || null,
-            level,
+            name: "段落" + index,
+            data_t: doc.attrs,
+            type: doc.type,
+            data: null,
             children: [],
           };
-
-          if (level === 1) {
-            nodes.push(node);
-            currentParent = node;
-            currentGrandparent = null;
-          } else if (level === 2) {
-            if (currentParent) {
-              currentParent.children.push(node);
-              currentGrandparent = node;
-            } else {
-              nodes.push(node);
-              currentParent = node;
-            }
-          } else if (level === 3) {
-            if (currentGrandparent) {
-              currentGrandparent.children.push(node);
-            } else if (currentParent) {
-              currentParent.children.push(node);
-              currentGrandparent = node;
-            } else {
-              nodes.push(node);
-              currentParent = node;
-            }
-          }
-          currentLevel = level;
-        } else if (currentGrandparent && level === 3) {
-          currentGrandparent.data =
-            (currentGrandparent.data || "") +
-            (currentGrandparent.data ? " " : "") +
-            description;
-        } else if (currentParent) {
-          currentParent.data =
-            (currentParent.data || "") +
-            (currentParent.data ? " " : "") +
-            description;
+          node.children.push(...items);
+          nodes.push(node);
+        });
+        break;
+      case XmWordType.HEADING_TYPE:
+        doc.content.forEach((paragraph, cindex) => {
+          const items = XmWord2Tree.parseDocument(
+            paragraph,
+            index + ":" + cindex
+          );
+          const node = {
+            name: "标题" + index,
+            data_t: doc.attrs,
+            data: null,
+            type: doc.type,
+            children: [],
+          };
+          node.children.push(...items);
+          nodes.push(node);
+        });
+        break;
+      case XmWordType.TEXT_TYPE:
+        {
+          const node = {
+            name: "文本" + index,
+            data: doc.text,
+            type: doc.type,
+            data_t: doc.marks,
+          };
+          nodes.push(node);
         }
-      }
-    });
-
+        break;
+      case XmWordType.HARDBREAK_TYPE:
+        {
+          const node = {
+            name: "换行" + index,
+            data: null,
+            type: doc.type,
+          };
+          nodes.push(node);
+        }
+        break;
+      case XmWordType.TABLE_TYPE:
+        doc.content.forEach((paragraph, cindex) => {
+          const items = XmWord2Tree.parseDocument(
+            paragraph,
+            index + ":" + cindex
+          );
+          const node = {
+            name: "表格" + index,
+            data_t: doc.attrs,
+            data: null,
+            type: doc.type,
+            children: [],
+          };
+          node.children.push(...items);
+          nodes.push(node);
+        });
+        break;
+      case XmWordType.TABLEROW_TYPE:
+        doc.content.forEach((paragraph, cindex) => {
+          const items = XmWord2Tree.parseDocument(
+            paragraph,
+            index + ":" + cindex
+          );
+          const node = {
+            name: "表行" + index,
+            data_t: doc.attrs,
+            data: null,
+            type: doc.type,
+            children: [],
+          };
+          node.children.push(...items);
+          nodes.push(node);
+        });
+        break;
+      case XmWordType.TABLECELL_TYPE:
+        doc.content.forEach((paragraph, cindex) => {
+          const items = XmWord2Tree.parseDocument(
+            paragraph,
+            index + ":" + cindex
+          );
+          const node = {
+            name: "表列" + index,
+            data_t: doc.attrs,
+            data: null,
+            type: doc.type,
+            children: [],
+          };
+          node.children.push(...items);
+          nodes.push(node);
+        });
+        break;
+    }
     return nodes;
   }
 
@@ -189,7 +141,7 @@ export default class XmWord2Tree {
           name: node.name,
           data: node.data,
           data_o: null, // Adjust based on your requirements
-          data_t: null,
+          data_t: node.data_t,
           data_a: null,
         },
         dbName,
@@ -257,7 +209,7 @@ export default class XmWord2Tree {
   ) {
     try {
       // Parse the document
-      const treeNodes = this.parseDocument(document);
+      const treeNodes = this.parseDocument(document, 0);
       console.log("Parsed tree nodes:", JSON.stringify(treeNodes, null, 2));
 
       // Create root node
@@ -265,7 +217,8 @@ export default class XmWord2Tree {
         req,
         {
           pid: 0,
-          name: "双十二电商活动策划方案",
+          type: "doc",
+          name: "方案",
           data: null,
           data_o: null,
           data_t: null,
@@ -278,13 +231,10 @@ export default class XmWord2Tree {
 
       // Insert child nodes
       await this.insertNodes(req, treeNodes, rootId, dbName, table, XmRouter);
-     return XmRouter.gzipResponse(
-        { code: 0, msg: "Success" },
-        200
-      );
       console.log(
         "Successfully converted document to tree structure in database"
       );
+      return XmRouter.gzipResponse({ code: 0, msg: "Success" }, 200);
     } catch (error) {
       console.error("Failed to convert document to tree:", error.message);
     }

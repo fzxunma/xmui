@@ -7,7 +7,7 @@ import XmTableEdit from "../components/XmTableEditCheck.vue";
 import XmTableDragDropIcon from "../components/XmTableDragDropIcon.vue";
 import XmApiRequest from "../units/XmApiRequest.js";
 import umoOption from "../vendor/umodoc/umoOption.js";
-import testData from "../units/test.js";
+import testData from "../units/test1.js";
 import { useDraggable } from 'vue-draggable-plus'
 
 export default {
