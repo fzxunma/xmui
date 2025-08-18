@@ -4,7 +4,7 @@ export default class XmDbList {
   static async getListItems(
     pid = 0,
     page = 1,
-    limit = 100,
+    limit = 1000,
     dbName = "xm1",
     table = "list"
   ) {

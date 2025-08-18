@@ -117,10 +117,11 @@ export class XmRouter {
         case "d2t":
           return await XmWord2Tree.convertDocumentToTree(
             req,
+            data,
             dbName,
             table,
             XmRouter
-          )
+          );
         case "add":
           return await XmDbTree.handleCreateTreeNode(
             req,
@@ -138,7 +139,7 @@ export class XmRouter {
             XmRouter
           );
         case "upsert":
-          console.log(data)
+          console.log(data);
           return await XmDbTree.handleUpsertTreeNode(
             req,
             data,
@@ -212,7 +213,7 @@ export class XmRouter {
     try {
       const pid = data.pid || 0;
       const page = data.page || 1;
-      const limit = data.limit || 100;
+      const limit = data.limit || 1000;
       const listItems = await XmDbList.getListItems(
         pid,
         page,

@@ -7,8 +7,8 @@ import XmTableEdit from "../components/XmTableEditCheck.vue";
 import XmTableDragDropIcon from "../components/XmTableDragDropIcon.vue";
 import XmApiRequest from "../units/XmApiRequest.js";
 import umoOption from "../vendor/umodoc/umoOption.js";
-import testData from "../units/test1.js";
 import { useDraggable } from 'vue-draggable-plus'
+import XmTree2Word from "../units/XmTree2Word.js";
 
 export default {
   components: {
@@ -17,7 +17,10 @@ export default {
   },
   setup() {
     umoOption.onSave = async (content, page, document) => {
-      console.log(content, page, document)
+      console.log(content.json)
+      return true
+      const action = 'd2t';
+      await XmApiRequest(action, content.json, "tree");
       return true;
     }
     const tableRef = ref(null);
@@ -149,7 +152,27 @@ export default {
         loading.value = false;
       }
     };
-
+    const convertTreeToDocument = () => {
+      if (!selectedKeys.value.length) {
+        message.error('Please select a root node to convert');
+        return;
+      }
+      loading.value = true;
+      errorMessage.value = '';
+      try {
+        const rootId = selectedKeys.value[0];
+        const doc = XmTree2Word.treeToDocument(
+          treeData.value, // req, adjust based on your XmApiRequest setup
+          rootId
+        );
+        editorRef.value.setContent(doc);
+      } catch (err) {
+        errorMessage.value = err.message;
+        message.error(err.message);
+      } finally {
+        loading.value = false;
+      }
+    };
     const fetchListData = async () => {
       if (table.value === 'page') {
         return;
@@ -262,6 +285,7 @@ export default {
         await loadData();
       }
       initDraggable();
+      convertTreeToDocument()
     };
 
     const handleTableSelect = (keys) => {
@@ -270,8 +294,8 @@ export default {
 
     const handleTabChange = async (value) => {
       table.value = value;
-      editorRef.value.setContent(testData);
-      console.log(editorRef.value.getJSON())
+      //editorRef.value.setContent(testData);
+      //console.log(editorRef.value.getJSON())
       await fetchListData();
     };
 
@@ -315,8 +339,6 @@ export default {
 
     onMounted(async () => {
       initDraggable();
-      const action = 'd2t';
-      await XmApiRequest(action, {}, "tree");
     });
     const onSaved = () => {
       console.log('onSaved', '文档已保存，无可用参数')
@@ -358,9 +380,12 @@ export default {
   <div class="h-full mx-auto bg-white shadow-lg rounded-lg overflow-hidden">
     <div class="h-full flex gap-1">
       <!-- Tree View (Left) -->
-      <div class="w-64 h-full min-h-0 p-2.5 border border-gray-200">
-        <h2 class="text-xl font-semibold mb-2">编排</h2>
-        <n-tree :data="treeData" style="max-height: calc(100vh - 80px);" key-field="id" label-field="name" show-line
+      <div class="w-64 h-full min-h-0  border border-gray-200">
+        <n-tabs type="line" animated v-model:value="table" @update:value="handleTabChange">
+          <n-tab name="page" tab="编排"></n-tab>
+          <n-tab name="tree" tab="数据"></n-tab>
+        </n-tabs>
+        <n-tree :data="treeData" style="max-height: calc(100vh - 100px);" key-field="id" label-field="name" show-line
           expandable block-line virtual-scroll selectable :selected-keys="selectedKeys"
           @update:selected-keys="handleTreeSelect" />
         <p v-if="treeData && !treeData.length" class="text-gray-500 mt-2">
@@ -368,11 +393,8 @@ export default {
         </p>
       </div>
       <!-- Tree Nodes and List Items Table (Right) -->
-      <div class="flex-1 h-full overflow-hidden p-2.5 border border-gray-200">
-        <n-tabs type="line" animated v-model:value="table" @update:value="handleTabChange">
-          <n-tab name="page" tab="页面"></n-tab>
-          <n-tab name="tree" tab="数据"></n-tab>
-        </n-tabs>
+      <div class="flex-1 h-full overflow-hidden  border border-gray-200">
+
         <div v-show="table == 'page'" class="h-full min-h-0 overflow-y-auto">
           <umo-editor v-bind="umoOption" ref="editorRef" @saved="onSaved" @changed="onChanged"></umo-editor>
         </div>

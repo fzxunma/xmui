@@ -559,28 +559,27 @@ export class XmDbCRUD {
       //   updates.pid !== undefined ||
       //   updates.key !== undefined
       // ) {
-        XmDb.keyCache.delete(`${cacheKey}:${oldCompositeKey}`);
-        XmDb.keyCache.set(`${cacheKey}:${compositeKey}`, updatedRow);
+      XmDb.keyCache.delete(`${cacheKey}:${oldCompositeKey}`);
+      XmDb.keyCache.set(`${cacheKey}:${compositeKey}`, updatedRow);
 
-        // Update pidCache
-        if (existing.pid !== newPid) {
-          const oldPidRows =
-            XmDb.pidCache.get(`${cacheKey}:${existing.pid}`) || [];
-          XmDb.pidCache.set(
-            `${cacheKey}:${existing.pid}`,
-            oldPidRows.filter((row) => row.id !== id)
-          );
-          const newPidRows = XmDb.pidCache.get(`${cacheKey}:${newPid}`) || [];
-          newPidRows.push(updatedRow);
-          XmDb.pidCache.set(`${cacheKey}:${newPid}`, newPidRows);
-        } else {
-          const pidRows =
-            XmDb.pidCache.get(`${cacheKey}:${existing.pid}`) || [];
-          const updatedPidRows = pidRows.map((row) =>
-            row.id === id ? updatedRow : row
-          );
-          XmDb.pidCache.set(`${cacheKey}:${existing.pid}`, updatedPidRows);
-        }
+      // Update pidCache
+      if (existing.pid !== newPid) {
+        const oldPidRows =
+          XmDb.pidCache.get(`${cacheKey}:${existing.pid}`) || [];
+        XmDb.pidCache.set(
+          `${cacheKey}:${existing.pid}`,
+          oldPidRows.filter((row) => row.id !== id)
+        );
+        const newPidRows = XmDb.pidCache.get(`${cacheKey}:${newPid}`) || [];
+        newPidRows.push(updatedRow);
+        XmDb.pidCache.set(`${cacheKey}:${newPid}`, newPidRows);
+      } else {
+        const pidRows = XmDb.pidCache.get(`${cacheKey}:${existing.pid}`) || [];
+        const updatedPidRows = pidRows.map((row) =>
+          row.id === id ? updatedRow : row
+        );
+        XmDb.pidCache.set(`${cacheKey}:${existing.pid}`, updatedPidRows);
+      }
       //}
 
       // Log update operation
@@ -902,6 +901,7 @@ export class XmDbCRUD {
   static async upsert({
     tableName,
     name,
+    type,
     pid = 0,
     data = {},
     dbName = "xm1",
@@ -922,6 +922,7 @@ export class XmDbCRUD {
         const updates = {};
         if (name !== undefined) updates.name = name;
         if (pid !== undefined) updates.pid = pid;
+        if (type !== undefined) updates.type = type;
         if (data.data !== undefined) updates.data = data.data;
         if (data.data_o !== undefined) updates.data_o = data.data_o;
         if (data.data_t !== undefined) updates.data_t = data.data_t;

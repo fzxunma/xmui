@@ -1,4 +1,3 @@
-import document from "./test1.js";
 import { XmDbCRUD } from "./XmDbCRUD.js";
 class XmWordType {
   static TEXT_TYPE = "text";
@@ -139,6 +138,7 @@ export default class XmWord2Tree {
         {
           pid: parentId,
           name: node.name,
+          type: node.type,
           data: node.data,
           data_o: null, // Adjust based on your requirements
           data_t: node.data_t,
@@ -185,7 +185,7 @@ export default class XmWord2Tree {
         uniqueValues: [],
         dbName,
         data: {
-          data: data ? JSON.stringify(data) : null,
+          data: data ? data : null,
           data_o: data_o ? JSON.stringify(data_o) : null,
           data_t: data_t ? JSON.stringify(data_t) : null,
           data_a: data_a ? JSON.stringify(data_a) : null,
@@ -203,13 +203,14 @@ export default class XmWord2Tree {
 
   static async convertDocumentToTree(
     req,
+    data,
     dbName = "xm1",
     table = "tree",
     XmRouter
   ) {
     try {
       // Parse the document
-      const treeNodes = this.parseDocument(document, 0);
+      const treeNodes = this.parseDocument(data, 0);
       console.log("Parsed tree nodes:", JSON.stringify(treeNodes, null, 2));
 
       // Create root node
