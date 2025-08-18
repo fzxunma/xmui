@@ -41,7 +41,15 @@ export default class XmTree2Word {
       if (!rootNode) {
         throw new Error(`Root node with id ${rootId} not found`);
       }
-      if (rootNode.type === XmWordType.TEXT_TYPE) {
+      if (
+        [
+          XmWordType.PARAGRAPH_TYPE,
+          XmWordType.HEADING_TYPE,
+          XmWordType.TABLE_TYPE,
+          XmWordType.TABLEROW_TYPE,
+          XmWordType.TABLECELL_TYPE,
+        ].includes(rootNode.type)
+      ) {
         const docNode = {
           type: rootNode.type,
           content: [],
@@ -56,6 +64,20 @@ export default class XmTree2Word {
             docNode.attrs = {};
           }
         }
+        const childNodes = rootNode.children;
+        for (const node of childNodes) {
+          const docchildNode = this.convertNodeToDoc(node, data);
+          if (docchildNode) {
+            docNode.content.push(docchildNode);
+          }
+        }
+        document.content.push(docNode);
+      } else if (rootNode.type === XmWordType.TEXT_TYPE) {
+        const docNode = {
+          type: rootNode.type,
+          content: [],
+        };
+
         docNode.text = rootNode.data ? rootNode.data : "";
         docNode.id = rootNode.id;
         docNode.marks = rootNode.data_t ? JSON.parse(rootNode.data_t) : [];
@@ -78,7 +100,6 @@ export default class XmTree2Word {
           }
         }
       }
-
       return document;
     } catch (error) {
       console.error("Failed to convert tree to document:333", error.message);

@@ -1,4 +1,6 @@
 import { XmDbCRUD } from "./XmDbCRUD.js";
+import XmDbTree from "./XmDbTree.js";
+
 class XmWordType {
   static TEXT_TYPE = "text";
   static PARAGRAPH_TYPE = "paragraph";
@@ -9,7 +11,19 @@ class XmWordType {
   static TABLECELL_TYPE = "tableCell";
   static HARDBREAK_TYPE = "hardBreak";
 }
+
 export default class XmWord2Tree {
+  static async generateUniqueName(baseName, pid, dbName, table) {
+    let name = baseName;
+    let index = 0;
+    const children = await XmDbTree.getChildren(pid, dbName, table);
+    while (children.some(child => child.name === name)) {
+      index++;
+      name = `${baseName}_${index}`;
+    }
+    return name;
+  }
+
   static parseDocument(doc, index) {
     const nodes = [];
 
@@ -27,13 +41,12 @@ export default class XmWord2Tree {
             index + ":" + cindex
           );
           const node = {
-            name: "段落" + index,
+            name: "段落" + index, // Will be adjusted in insertNodes
             data_t: doc.attrs,
             type: doc.type,
             data: null,
-            children: [],
+            children: items,
           };
-          node.children.push(...items);
           nodes.push(node);
         });
         break;
@@ -46,11 +59,10 @@ export default class XmWord2Tree {
           const node = {
             name: "标题" + index,
             data_t: doc.attrs,
-            data: null,
             type: doc.type,
-            children: [],
+            data: null,
+            children: items,
           };
-          node.children.push(...items);
           nodes.push(node);
         });
         break;
@@ -84,11 +96,10 @@ export default class XmWord2Tree {
           const node = {
             name: "表格" + index,
             data_t: doc.attrs,
-            data: null,
             type: doc.type,
-            children: [],
+            data: null,
+            children: items,
           };
-          node.children.push(...items);
           nodes.push(node);
         });
         break;
@@ -101,11 +112,10 @@ export default class XmWord2Tree {
           const node = {
             name: "表行" + index,
             data_t: doc.attrs,
-            data: null,
             type: doc.type,
-            children: [],
+            data: null,
+            children: items,
           };
-          node.children.push(...items);
           nodes.push(node);
         });
         break;
@@ -118,11 +128,10 @@ export default class XmWord2Tree {
           const node = {
             name: "表列" + index,
             data_t: doc.attrs,
-            data: null,
             type: doc.type,
-            children: [],
+            data: null,
+            children: items,
           };
-          node.children.push(...items);
           nodes.push(node);
         });
         break;
@@ -130,36 +139,57 @@ export default class XmWord2Tree {
     return nodes;
   }
 
-  // Insert nodes into the database
   static async insertNodes(req, nodes, parentId = 0, dbName, table, XmRouter) {
     for (const node of nodes) {
-      const nodeId = await this.createNode(
-        req,
-        {
-          pid: parentId,
-          name: node.name,
-          type: node.type,
-          data: node.data,
-          data_o: null, // Adjust based on your requirements
-          data_t: node.data_t,
-          data_a: null,
-        },
-        dbName,
-        table,
-        XmRouter
+      const uniqueName = await this.generateUniqueName(node.name, parentId, dbName, table);
+      const existingNodes = await XmDbTree.getChildren(parentId, dbName, table);
+      const existingNode = existingNodes.find(
+        n => n.type === node.type && n.name === uniqueName
       );
-      if (node.children && node.children.length > 0) {
-        await this.insertNodes(
+      let nodeId;
+
+      if (existingNode && node.type !== XmWordType.TEXT_TYPE) {
+        nodeId = existingNode.id;
+        if (node.children && node.children.length > 0) {
+          await this.insertNodes(
+            req,
+            node.children,
+            nodeId,
+            dbName,
+            table,
+            XmRouter
+          );
+        }
+      } else {
+        nodeId = await this.createNode(
           req,
-          node.children,
-          nodeId,
+          {
+            pid: parentId,
+            name: uniqueName,
+            type: node.type,
+            data: node.data,
+            data_o: null,
+            data_t: node.data_t,
+            data_a: null,
+          },
           dbName,
           table,
           XmRouter
         );
+        if (node.children && node.children.length > 0) {
+          await this.insertNodes(
+            req,
+            node.children,
+            nodeId,
+            dbName,
+            table,
+            XmRouter
+          );
+        }
       }
     }
   }
+
   static async createNode(
     req,
     {
@@ -176,7 +206,7 @@ export default class XmWord2Tree {
     XmRouter
   ) {
     try {
-      const treeNode = await XmDbCRUD.upsert({
+      const treeNode = await XmDbCRUD.create({
         tableName: table,
         pid,
         name,
@@ -184,12 +214,10 @@ export default class XmWord2Tree {
         uniqueFields: [],
         uniqueValues: [],
         dbName,
-        data: {
-          data: data ? data : null,
-          data_o: data_o ? JSON.stringify(data_o) : null,
-          data_t: data_t ? JSON.stringify(data_t) : null,
-          data_a: data_a ? JSON.stringify(data_a) : null,
-        },
+        data,
+        data_o,
+        data_t,
+        data_a,
         req,
         userId: 0,
       });
@@ -197,6 +225,104 @@ export default class XmWord2Tree {
       return treeNode.id;
     } catch (error) {
       console.error(`Failed to create node ${name}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  static async updateTextNode(
+    req,
+    { id, text, marks },
+    dbName,
+    table,
+    XmRouter
+  ) {
+    try {
+      const existingNode = await XmDbCRUD.read({
+        tableName: table,
+        id,
+        dbName,
+        req,
+        userId: 0,
+      });
+
+      if (!existingNode) {
+        throw new Error(`Node with id ${id} not found`);
+      }
+
+      if (existingNode.type !== XmWordType.TEXT_TYPE) {
+        throw new Error(`Node with id ${id} is not a text node`);
+      }
+
+      const updatedNode = await XmDbCRUD.update({
+        tableName: table,
+        id,
+        updates: {
+          data: text,
+          data_t: marks || existingNode.data_t,
+          name: existingNode.name,
+          type: existingNode.type,
+          pid: existingNode.pid,
+          data_o: existingNode.data_o,
+          data_a: existingNode.data_a,
+        },
+        dbName,
+        req,
+        userId: 0,
+      });
+
+      console.log(`Updated text node: ${existingNode.name} with id: ${id}`);
+      return updatedNode.id;
+    } catch (error) {
+      console.error(`Failed to update text node ${id}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  static async updateParagraphNode(
+    req,
+    { id, attrs },
+    dbName,
+    table,
+    XmRouter
+  ) {
+    try {
+      const existingNode = await XmDbCRUD.read({
+        tableName: table,
+        id,
+        dbName,
+        req,
+        userId: 0,
+      });
+
+      if (!existingNode) {
+        throw new Error(`Node with id ${id} not found`);
+      }
+
+      if (existingNode.type !== XmWordType.PARAGRAPH_TYPE) {
+        throw new Error(`Node with id ${id} is not a paragraph node`);
+      }
+
+      const updatedNode = await XmDbCRUD.update({
+        tableName: table,
+        id,
+        updates: {
+          data_t: attrs || existingNode.data_t,
+          name: existingNode.name,
+          type: existingNode.type,
+          pid: existingNode.pid,
+          data: existingNode.data,
+          data_o: existingNode.data_o,
+          data_a: existingNode.data_a,
+        },
+        dbName,
+        req,
+        userId: 0,
+      });
+
+      console.log(`Updated paragraph node: ${existingNode.name} with id: ${id}`);
+      return updatedNode.id;
+    } catch (error) {
+      console.error(`Failed to update paragraph node ${id}: ${error.message}`);
       throw error;
     }
   }
@@ -209,35 +335,196 @@ export default class XmWord2Tree {
     XmRouter
   ) {
     try {
-      // Parse the document
-      const treeNodes = this.parseDocument(data, 0);
-      console.log("Parsed tree nodes:", JSON.stringify(treeNodes, null, 2));
+      const { rootId, data: docData } = data;
 
-      // Create root node
-      const rootId = await this.createNode(
-        req,
-        {
-          pid: 0,
-          type: "doc",
-          name: "方案",
-          data: null,
-          data_o: null,
-          data_t: null,
-          data_a: null,
-        },
+      if (!rootId || rootId <= 0) {
+        throw new Error("Invalid rootId provided");
+      }
+
+      // Check if the rootId corresponds to a node
+      const rootNode = await XmDbCRUD.read({
+        tableName: table,
+        id: rootId,
         dbName,
-        table,
-        XmRouter
-      );
+        req,
+        userId: 0,
+      });
 
-      // Insert child nodes
-      await this.insertNodes(req, treeNodes, rootId, dbName, table, XmRouter);
-      console.log(
-        "Successfully converted document to tree structure in database"
-      );
+      if (!rootNode) {
+        throw new Error(`Root node with id ${rootId} not found`);
+      }
+
+      const textContent = docData.content?.[0]?.content?.[0]?.text;
+      const textMarks = docData.content?.[0]?.content?.[0]?.marks || null;
+
+      if (!textContent && rootId !== 1) {
+        throw new Error("No text content found in document");
+      }
+
+      if (rootNode.type === XmWordType.TEXT_TYPE) {
+        // Update the text node's data
+        await this.updateTextNode(
+          req,
+          { id: rootId, text: textContent, marks: textMarks },
+          dbName,
+          table,
+          XmRouter
+        );
+      } else if (rootNode.type === XmWordType.PARAGRAPH_TYPE) {
+        // Find existing text node under the paragraph
+        const children = await XmDbTree.getChildren(rootId, dbName, table);
+        const textNodes = children.filter(node => node.type === XmWordType.TEXT_TYPE);
+
+        if (textNodes.length > 0) {
+          // Update the first text node
+          await this.updateTextNode(
+            req,
+            { id: textNodes[0].id, text: textContent, marks: textMarks },
+            dbName,
+            table,
+            XmRouter
+          );
+        } else {
+          // Create a new text node with unique name
+          const uniqueTextName = await this.generateUniqueName("文本0", rootId, dbName, table);
+          const newTextNode = await this.createNode(
+            req,
+            {
+              pid: rootId,
+              name: uniqueTextName,
+              type: XmWordType.TEXT_TYPE,
+              data: textContent,
+              data_t: textMarks,
+              data_o: null,
+              data_a: null,
+            },
+            dbName,
+            table,
+            XmRouter
+          );
+          console.log(`Created new text node with id: ${newTextNode}`);
+        }
+        // Update paragraph attributes if provided
+        if (docData.content?.[0]?.attrs) {
+          await this.updateParagraphNode(
+            req,
+            { id: rootId, attrs: docData.content[0].attrs },
+            dbName,
+            table,
+            XmRouter
+          );
+        }
+      } else if (rootNode.type === XmWordType.DOC_TYPE && rootId === 1) {
+        // Full document update: compare and update by index
+        const children = await XmDbTree.getChildren(rootId, dbName, table);
+        const paragraphNodes = children.filter(node => node.type === XmWordType.PARAGRAPH_TYPE);
+        const paragraphs = docData.content || [];
+
+        // Update or create paragraph nodes based on index
+        for (let i = 0; i < paragraphs.length; i++) {
+          const paragraph = paragraphs[i];
+          const paragraphNode = i < paragraphNodes.length ? paragraphNodes[i] : null;
+
+          let paragraphNodeId;
+          if (paragraphNode) {
+            // Update existing paragraph node
+            paragraphNodeId = paragraphNode.id;
+            if (paragraph.attrs) {
+              await this.updateParagraphNode(
+                req,
+                { id: paragraphNodeId, attrs: paragraph.attrs },
+                dbName,
+                table,
+                XmRouter
+              );
+            }
+          } else {
+            // Create new paragraph node with unique name
+            const uniqueParagraphName = await this.generateUniqueName(`段落${i}`, rootId, dbName, table);
+            paragraphNodeId = await this.createNode(
+              req,
+              {
+                pid: rootId,
+                name: uniqueParagraphName,
+                type: XmWordType.PARAGRAPH_TYPE,
+                data: null,
+                data_t: paragraph.attrs || null,
+                data_o: null,
+                data_a: null,
+              },
+              dbName,
+              table,
+              XmRouter
+            );
+            console.log(`Created new paragraph node with id: ${paragraphNodeId}`);
+          }
+
+          // Update or create text nodes under the paragraph
+          const paragraphChildren = await XmDbTree.getChildren(paragraphNodeId, dbName, table);
+          const textNodes = paragraphChildren.filter(node => node.type === XmWordType.TEXT_TYPE);
+          const textContent = paragraph.content || [];
+
+          for (let j = 0; j < textContent.length; j++) {
+            if (textContent[j].type === XmWordType.TEXT_TYPE) {
+              const textNode = j < textNodes.length ? textNodes[j] : null;
+              if (textNode) {
+                // Update existing text node
+                await this.updateTextNode(
+                  req,
+                  { id: textNode.id, text: textContent[j].text, marks: textContent[j].marks || null },
+                  dbName,
+                  table,
+                  XmRouter
+                );
+              } else {
+                // Create new text node with unique name
+                const uniqueTextName = await this.generateUniqueName(`文本${j}`, paragraphNodeId, dbName, table);
+                const newTextNode = await this.createNode(
+                  req,
+                  {
+                    pid: paragraphNodeId,
+                    name: uniqueTextName,
+                    type: XmWordType.TEXT_TYPE,
+                    data: textContent[j].text,
+                    data_t: textContent[j].marks || null,
+                    data_o: null,
+                    data_a: null,
+                  },
+                  dbName,
+                  table,
+                  XmRouter
+                );
+                console.log(`Created new text node with id: ${newTextNode}`);
+              }
+            }
+          }
+        }
+
+        // Optionally, delete extra paragraph nodes if content.json has fewer paragraphs
+        for (let i = paragraphs.length; i < paragraphNodes.length; i++) {
+          await XmDbCRUD.delete({
+            tableName: table,
+            id: paragraphNodes[i].id,
+            soft: true,
+            dbName,
+            req,
+            userId: 0,
+          });
+          console.log(`Deleted extra paragraph node with id: ${paragraphNodes[i].id}`);
+        }
+      } else {
+        // Parse and insert new nodes for other node types
+        const treeNodes = this.parseDocument(docData, 0);
+        await this.insertNodes(req, treeNodes, rootId, dbName, table, XmRouter);
+      }
+
       return XmRouter.gzipResponse({ code: 0, msg: "Success" }, 200);
     } catch (error) {
       console.error("Failed to convert document to tree:", error.message);
+      return XmRouter.gzipResponse(
+        { code: -1, msg: `Error: ${error.message}` },
+        500
+      );
     }
   }
 }

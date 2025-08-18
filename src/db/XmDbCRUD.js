@@ -943,6 +943,7 @@ export class XmDbCRUD {
           tableName,
           pid: pid ?? 0,
           name: name ?? "",
+          type,
           uniqueFields: data.uniqueFields || [],
           uniqueValues: data.uniqueValues || [],
           dbName,

@@ -17,12 +17,28 @@ export default {
   },
   setup() {
     umoOption.onSave = async (content, page, document) => {
-      console.log(content.json)
-      return true
       const action = 'd2t';
-      await XmApiRequest(action, content.json, "tree");
+      const rootId = selectedKeys.value[0];
+      if (rootId > 0) {
+        errorMessage.value = '';
+        try {
+          // Send content.json and rootId to server for parsing
+          const data = await XmApiRequest(action, { rootId, data: content.json }, "tree");
+          if (data.code !== 0) {
+            throw new Error(data.msg || 'Failed to save document to tree');
+          }
+          await loadData();
+          message.success(data.msg || 'Document saved to tree successfully');
+        } catch (err) {
+          errorMessage.value = err.message;
+          message.error(err.message);
+        }
+      } else {
+        errorMessage.value = 'No root node selected';
+        message.error('Please select a root node to save the document');
+      }
       return true;
-    }
+    };
     const tableRef = ref(null);
     const editorRef = ref(null);
     const message = useMessage();
@@ -295,7 +311,7 @@ export default {
     const handleTabChange = async (value) => {
       table.value = value;
       //editorRef.value.setContent(testData);
-      //console.log(editorRef.value.getJSON())
+      console.log(editorRef.value.getJSON())
       await fetchListData();
     };
 
