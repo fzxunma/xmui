@@ -444,7 +444,7 @@ export default {
       "page",
       "export"
     ],
-    "disableMenuItems": [],
+    "disableMenuItems": ["share", "embed"],
     "importWord": {
       "enabled": true,
       "maxSize": 5242880,
@@ -597,7 +597,6 @@ export default {
     "mode": 1,
     "renderImage": false
   },
-  "shareUrl": "https://www.umodoc.com/",
   "templates": [],
   "cdnUrl": "/vendor/umodoc/",
   "diagrams": {
@@ -629,34 +628,6 @@ export default {
   },
   "user": {},
   "users": [
-    {
-      "id": "umodoc",
-      "label": "Umo Team"
-    },
-    {
-      "id": "Cassielxd",
-      "label": "Cassielxd"
-    },
-    {
-      "id": "Goldziher",
-      "label": "Na'aman Hirschfeld"
-    },
-    {
-      "id": "SerRashin",
-      "label": "SerRashin"
-    },
-    {
-      "id": "ChenErik",
-      "label": "ChenErik"
-    },
-    {
-      "id": "china-wangxu",
-      "label": "china-wangxu"
-    },
-    {
-      "id": "Sherman Xu",
-      "label": "xuzhenjun130"
-    },
     {
       "id": "testuser",
       "label": "测试用户"

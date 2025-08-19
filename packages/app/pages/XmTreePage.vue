@@ -17,13 +17,22 @@ export default {
   },
   setup() {
     umoOption.onSave = async (content, page, document) => {
-      const action = 'd2t';
       const rootId = selectedKeys.value[0];
       if (rootId > 0) {
         errorMessage.value = '';
+        const node = flatTreeNodes.value.find(n => n.value === rootId);
+        const action = 'edit';
+        const input = {
+          id: node.id,
+          name: node.name,
+          pid: node.pid,
+          version: node.version,
+          data: content.json,
+        };
+        console.log(node)
         try {
           // Send content.json and rootId to server for parsing
-          const data = await XmApiRequest(action, { rootId, data: content.json }, "tree");
+          const data = await XmApiRequest(action, input, "tree");
           if (data.code !== 0) {
             throw new Error(data.msg || 'Failed to save document to tree');
           }
@@ -63,7 +72,7 @@ export default {
       version_t: 0,
       version_a: 0
     });
-    const selectedKeys = ref([]);
+    const selectedKeys = ref([2]);
     const errorMessage = ref('');
     const table = ref('page');
 
@@ -150,6 +159,8 @@ export default {
               label: node.name,
               pid: node.pid !== null ? node.pid : null,
               id: node.id,
+              version: node.version,
+              data: node.data,
               name: node.name,
               key: node.key
             });
@@ -159,6 +170,7 @@ export default {
           });
         };
         flattenNodes(treeData.value);
+        convertTreeToDocument()
       } catch (err) {
         errorMessage.value = err.message;
         message.error(err.message);
@@ -177,13 +189,17 @@ export default {
       errorMessage.value = '';
       try {
         const rootId = selectedKeys.value[0];
-        const doc = XmTree2Word.treeToDocument(
-          treeData.value, // req, adjust based on your XmApiRequest setup
-          rootId
-        );
-        editorRef.value.setContent(doc);
+        const node = flatTreeNodes.value.find(n => n.value === rootId);
+       
+        if (node.data&&node.data.length > 0) {
+          const treeData = JSON.parse(node.data)
+          editorRef.value.setContent(treeData);
+        }else{
+          editorRef.value.setContent();
+        }
       } catch (err) {
         errorMessage.value = err.message;
+        console.log( errorMessage.value)
         message.error(err.message);
       } finally {
         loading.value = false;
@@ -402,7 +418,7 @@ export default {
           <n-tab name="tree" tab="数据"></n-tab>
         </n-tabs>
         <n-tree :data="treeData" style="max-height: calc(100vh - 100px);" key-field="id" label-field="name" show-line
-          expandable block-line virtual-scroll selectable :selected-keys="selectedKeys"
+          default-expand-all expandable block-line virtual-scroll selectable :selected-keys="selectedKeys"
           @update:selected-keys="handleTreeSelect" />
         <p v-if="treeData && !treeData.length" class="text-gray-500 mt-2">
           No tree nodes available. Add a node to start.

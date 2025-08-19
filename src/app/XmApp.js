@@ -25,7 +25,7 @@ export class XmApp {
   static async run() {
     // 创建 Bun 服务器
     XmApp.server = Bun.serve({
-      port: 3000,
+      port: 3001,
       async fetch(req) {
         return await XmRouter.setup(req);
       },
