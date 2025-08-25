@@ -72,7 +72,7 @@ export default {
       version_t: 0,
       version_a: 0
     });
-    const selectedKeys = ref([2]);
+    const selectedKeys = ref([]);
     const errorMessage = ref('');
     const table = ref('page');
 
@@ -190,16 +190,16 @@ export default {
       try {
         const rootId = selectedKeys.value[0];
         const node = flatTreeNodes.value.find(n => n.value === rootId);
-       
-        if (node.data&&node.data.length > 0) {
+
+        if (node.data && node.data.length > 0) {
           const treeData = JSON.parse(node.data)
           editorRef.value.setContent(treeData);
-        }else{
+        } else {
           editorRef.value.setContent();
         }
       } catch (err) {
         errorMessage.value = err.message;
-        console.log( errorMessage.value)
+        console.log(errorMessage.value)
         message.error(err.message);
       } finally {
         loading.value = false;
@@ -316,7 +316,7 @@ export default {
         selectedKeys.value = keys;
         await loadData();
       }
-      initDraggable();
+      //initDraggable();
       convertTreeToDocument()
     };
 
@@ -327,7 +327,7 @@ export default {
     const handleTabChange = async (value) => {
       table.value = value;
       //editorRef.value.setContent(testData);
-      console.log(editorRef.value.getJSON())
+      //console.log(editorRef.value.getJSON())
       await fetchListData();
     };
 
@@ -371,9 +371,14 @@ export default {
 
     onMounted(async () => {
       initDraggable();
+      editorRef.value.setPage({
+        "zoomLevel": 150,
+      })
     });
     const onSaved = () => {
       console.log('onSaved', '文档已保存，无可用参数')
+      const page = editorRef.value.getPage()
+      console.log(page)
     }
     const onChanged = (editor) => {
       console.log('onChanged', '编辑器内容已更新，可用参数:', { editor })

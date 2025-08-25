@@ -461,7 +461,7 @@ export default {
     },
     "defaultOrientation": "portrait",
     "defaultBackground": "#fff",
-    "showBreakMarks": true,
+    "showBreakMarks": false,
     "showBookmark": false,
     "showLineNumber": false,
     "showToc": false,
